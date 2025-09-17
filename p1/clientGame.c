@@ -74,7 +74,7 @@ int main(int argc, char *argv[]){
 
 		/*TODO*/
 		
-		char message[256];
+		char message[256]="";;
 		ssize_t msgLength;
 
 		// Create socket
@@ -94,11 +94,16 @@ int main(int argc, char *argv[]){
 		if (connect(socketfd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0)
 			showError("ERROR while establishing connection");
 
+
+		while(strcmp(message, "exit") != 0){
+
+		
+			/* code */
 		// Init and read the message
 		printf("Enter a message: ");
 		memset(message, 0, MAX_MSG_LENGTH);
 		fgets(message, MAX_MSG_LENGTH-1, stdin);
-
+			
 		// Send message to the server side
 		msgLength = send(socketfd, message, strlen(message), 0);
 
@@ -116,7 +121,7 @@ int main(int argc, char *argv[]){
 
 		// Show the returned message
 		printf("%s\n",message);
-
+		}
 		// Close socket
 		close(socketfd);
 

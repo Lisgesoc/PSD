@@ -101,95 +101,101 @@ unsigned int getRandomCard (tDeck* deck){
 	return card;
 }
 
+/** Función que maneja una partida entre 2 jugadores */
+void *handleGame(void *args) {
+    tThreadArgs *threadArgs = (tThreadArgs *) args;
+    int socketPlayer1 = threadArgs->socketPlayer1;
+    int socketPlayer2 = threadArgs->socketPlayer2;
 
+    // Crear sesión
+    tSession session;
+    initSession(&session);
 
-int main(int argc, char *argv[]){
+    printf("Nueva partida creada entre sockets %d y %d\n", socketPlayer1, socketPlayer2);
 
-	int socketfd;						/** Socket descriptor */
-	struct sockaddr_in serverAddress;	/** Server address structure */
-	unsigned int port;					/** Listening port */
-	struct sockaddr_in player1Address;	/** Client address structure for player 1 */
-	struct sockaddr_in player2Address;	/** Client address structure for player 2 */
-	int socketPlayer1;					/** Socket descriptor for player 1 */
-	int socketPlayer2;					/** Socket descriptor for player 2 */
-	unsigned int clientLength;			/** Length of client structure */
-	tThreadArgs *threadArgs; 			/** Thread parameters */
-	pthread_t threadID;					/** Thread ID */
+	//Logica del juego
+    send(socketPlayer1, "Bienvenido jugador 1\n", 22, 0);
+    send(socketPlayer2, "Bienvenido jugador 2\n", 22, 0);
 
+    // Bucle de juego (simplificado)
+    char buffer[MAX_MSG_LENGTH];
+    while (1) {
+        memset(buffer, 0, MAX_MSG_LENGTH);
+        int len = recv(socketPlayer1, buffer, MAX_MSG_LENGTH-1, 0);
+        if (len <= 0 || strcmp(buffer,"exit")==0) break;
+        send(socketPlayer2, buffer, strlen(buffer), 0);
 
-		// Seed
-		srand(time(0));
+        memset(buffer, 0, MAX_MSG_LENGTH);
+        len = recv(socketPlayer2, buffer, MAX_MSG_LENGTH-1, 0);
+        if (len <= 0 || strcmp(buffer,"exit")==0) break;
+        send(socketPlayer1, buffer, strlen(buffer), 0);
+    }
 
-		// Check arguments
-		if (argc != 2) {
-			fprintf(stderr,"ERROR wrong number of arguments\n");
-			fprintf(stderr,"Usage:\n$>%s port\n", argv[0]);
-			exit(1);
-		}
+    close(socketPlayer1);
+    close(socketPlayer2);
+    free(threadArgs);
 
-	/*TODO*/
-	
-		char message[256];
-		ssize_t messageLength;
+    printf("Partida finalizada\n");
+    return NULL;
+}
 
-		 // Create the socket
-		 socketfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+int main(int argc, char *argv[]) {
+    int socketfd;
+    struct sockaddr_in serverAddress, player1Address, player2Address;
+    unsigned int port, clientLength;
+    int socketPlayer1 = -1, socketPlayer2;
+    tThreadArgs *threadArgs;
+    pthread_t threadID;
 
-		 // Check
-		 if (socketfd < 0)
-			showError("ERROR while opening socket");
+    if (argc != 2) {
+        fprintf(stderr, "Uso: %s <puerto>\n", argv[0]);
+        exit(1);
+    }
 
-		 // Init server structure
-		 memset(&serverAddress, 0, sizeof(serverAddress));
+    // Crear socket
+    socketfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (socketfd < 0) showError("Error creando socket");
 
-		 // Get listening port
-		 port = atoi(argv[1]);
+    memset(&serverAddress, 0, sizeof(serverAddress));
+    port = atoi(argv[1]);
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddress.sin_port = htons(port);
 
-		 // Fill server structure
-		 serverAddress.sin_family = AF_INET;
-		 serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-		 serverAddress.sin_port = htons(port);
+    if (bind(socketfd, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0)
+        showError("Error en bind");
 
-		 // Bind
-		 if (bind(socketfd, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0)
-			 showError("ERROR while binding");
+    listen(socketfd, 10);
+    printf("Servidor escuchando en puerto %d...\n", port);
 
-		 // Listen
-		 listen(socketfd, 10);
+    clientLength = sizeof(player1Address);
 
-		 // Get length of client structure
-		 clientLength = sizeof(player1Address);
+    while (1) {
+        int newSocket = accept(socketfd, (struct sockaddr *) &player1Address, &clientLength);
+        if (newSocket < 0) showError("Error en accept");
 
-		 // Accept!
-		 socketPlayer1 = accept(socketfd, (struct sockaddr *) &player1Address, &clientLength);
+        printf("Jugador conectado (socket %d)\n", newSocket);
 
-		 // Check accept result
-		 if (socketPlayer1 < 0)
-			  showError("ERROR while accepting");	  
+        if (socketPlayer1 == -1) {
+            socketPlayer1 = newSocket;
+            send(socketPlayer1, "Esperando otro jugador...\n", 27, 0);
+        } else {
+            socketPlayer2 = newSocket;
 
-		 // Init and read message
-		 memset(message, 0, MAX_MSG_LENGTH);
-		 messageLength = recv(socketPlayer1, message, MAX_MSG_LENGTH-1, 0);
+            // Crear args para el hilo
+            threadArgs = malloc(sizeof(tThreadArgs));
+            threadArgs->socketPlayer1 = socketPlayer1;
+            threadArgs->socketPlayer2 = socketPlayer2;
 
-		 // Check read bytes
-		 if (messageLength < 0)
-			 showError("ERROR while reading from socket");
+            // Lanzar hilo para la partida
+            pthread_create(&threadID, NULL, handleGame, threadArgs);
+            pthread_detach(threadID);
 
-		 // Show message
-		 printf("Message: %s\n", message);
+            // Reiniciar "jugador en espera"
+            socketPlayer1 = -1;
+        }
+    }
 
-		 // Get the message length
-		 memset (message, 0, MAX_MSG_LENGTH);
-		 strcpy (message, "Message received!");
-		 messageLength = send(socketPlayer1, message, strlen(message), 0);
-
-		 // Check bytes sent
-		 if (messageLength < 0)
-			 showError("ERROR while writing to socket");
-
-		 // Close sockets
-		 close(socketPlayer1);
-		 close(socketfd);
-
-	
+    close(socketfd);
+    return 0;
 }
