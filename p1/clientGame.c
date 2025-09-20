@@ -48,6 +48,42 @@ unsigned int readOption (){
 	return bet;
 }
 
+
+int sendMessage(int socket, const char *msg) {
+    int len = strlen(msg);
+    int tam = send(socket, &len, sizeof(len), 0);
+    int mens = send(socket, msg, len, 0);
+
+    if (tam < 0 || mens < 0) {
+        perror("Error al enviar mensaje");
+        return -1;
+    }
+    return 0;
+}
+
+int recvMessage(int socket, char *buffer, size_t bufferSize) {
+    int len;
+    int rec = recv(socket, &len, sizeof(len), 0);  
+    if (rec <= 0) {
+        perror("Error al recibir tamaño de mensaje");
+        return -1;
+    }
+
+    if (len >= bufferSize) {
+        fprintf(stderr, "Mensaje demasiado largo (%d bytes, buffer %zu)\n", len, bufferSize);
+        return -1;
+    }
+
+    int recMsg = recv(socket, buffer, len, 0);  
+    if (recMsg <= 0) {
+        perror("Error al recibir mensaje");
+        return -1;
+    }
+
+    buffer[recMsg] = '\0';  
+    return 0;
+}
+
 int main(int argc, char *argv[]){
 
 	int socketfd;						/** Socket descriptor */
@@ -74,7 +110,7 @@ int main(int argc, char *argv[]){
 
 		/*TODO*/
 		
-		char message[256]="";;
+		char buffer[MAX_MSG_LENGTH];
 		ssize_t msgLength;
 
 		// Create socket
@@ -95,32 +131,20 @@ int main(int argc, char *argv[]){
 			showError("ERROR while establishing connection");
 
 
-		while(strcmp(message, "exit") != 0){
-
-		
-			/* code */
-		// Init and read the message
-		printf("Enter a message: ");
-		memset(message, 0, MAX_MSG_LENGTH);
-		fgets(message, MAX_MSG_LENGTH-1, stdin);
+		while(strcmp(buffer, "exit") != 0){
+			// Init and read the message
+			printf("Enter a message: ");
+			memset(buffer, 0, MAX_MSG_LENGTH);
+			fgets(buffer, MAX_MSG_LENGTH-1, stdin);
 			
-		// Send message to the server side
-		msgLength = send(socketfd, message, strlen(message), 0);
-
-		// Check the number of bytes sent
-		if (msgLength < 0)
-			showError("ERROR while writing to the socket");
-
-		// Init for reading incoming message
-		memset(message, 0, MAX_MSG_LENGTH);
-		msgLength = recv(socketfd, message, MAX_MSG_LENGTH-1, 0);
-
-		// Check bytes read
-		if (msgLength < 0)
-			showError("ERROR while reading from the socket");
-
-		// Show the returned message
-		printf("%s\n",message);
+			// Send message to the server side
+		  	sendMessage(socketfd, buffer);
+		
+			// Init for reading incoming message
+			memset(buffer, 0, MAX_MSG_LENGTH);
+			recvMessage(socketfd, buffer,  MAX_MSG_LENGTH-1);
+		
+			printf("%s\n",buffer);
 		}
 		// Close socket
 		close(socketfd);

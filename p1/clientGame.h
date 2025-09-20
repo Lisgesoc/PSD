@@ -22,3 +22,6 @@ unsigned int readBet ();
  */
 unsigned int readOption ();
 
+int sendMessage(int socket, const char *msg);
+
+int recvMessage(int socket, char *buffer, size_t bufferSize);

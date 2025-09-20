@@ -101,34 +101,69 @@ unsigned int getRandomCard (tDeck* deck){
 	return card;
 }
 
-/** Función que maneja una partida entre 2 jugadores */
+int sendMessage(int socket, const char *msg) {
+    int len = strlen(msg);
+    int tam = send(socket, &len, sizeof(1), 0);
+    int mens = send(socket, msg, len, 0);
+
+    if (tam < 0 || mens < 0) {
+        perror("Error al enviar mensaje");
+        return -1;
+    }
+    return 0;
+}
+
+int recvMessage(int socket, char *buffer, size_t bufferSize) {
+    int len;
+    int rec = recv(socket, &len, sizeof(len), 0);  
+    if (rec <= 0) {
+        perror("Error al recibir tamaño de mensaje");
+        return -1;
+    }
+
+    if (len >= bufferSize) {
+        fprintf(stderr, "Mensaje demasiado largo (%d bytes, buffer %zu)\n", len, bufferSize);
+        return -1;
+    }
+
+    int recMsg = recv(socket, buffer, len, 0);  
+    if (recMsg <= 0) {
+        perror("Error al recibir mensaje");
+        return -1;
+    }
+
+    buffer[recMsg] = '\0';  
+    return 0;
+}
+
+
 void *handleGame(void *args) {
     tThreadArgs *threadArgs = (tThreadArgs *) args;
     int socketPlayer1 = threadArgs->socketPlayer1;
     int socketPlayer2 = threadArgs->socketPlayer2;
 
-    // Crear sesión
+
     tSession session;
     initSession(&session);
 
     printf("Nueva partida creada entre sockets %d y %d\n", socketPlayer1, socketPlayer2);
 
-	//Logica del juego
-    send(socketPlayer1, "Bienvenido jugador 1\n", 22, 0);
-    send(socketPlayer2, "Bienvenido jugador 2\n", 22, 0);
-
-    // Bucle de juego (simplificado)
     char buffer[MAX_MSG_LENGTH];
+    
     while (1) {
+   
         memset(buffer, 0, MAX_MSG_LENGTH);
-        int len = recv(socketPlayer1, buffer, MAX_MSG_LENGTH-1, 0);
-        if (len <= 0 || strcmp(buffer,"exit")==0) break;
-        send(socketPlayer2, buffer, strlen(buffer), 0);
+        if (recvMessage(socketPlayer1, buffer, MAX_MSG_LENGTH-1) < 0) break;
+        if (sendMessage(socketPlayer2, buffer) < 0) break;
 
+        if (strcmp(buffer, "exit") == 0) break;
+
+      
         memset(buffer, 0, MAX_MSG_LENGTH);
-        len = recv(socketPlayer2, buffer, MAX_MSG_LENGTH-1, 0);
-        if (len <= 0 || strcmp(buffer,"exit")==0) break;
-        send(socketPlayer1, buffer, strlen(buffer), 0);
+        if (recvMessage(socketPlayer2, buffer, MAX_MSG_LENGTH-1) < 0) break;
+        if (sendMessage(socketPlayer1, buffer) < 0) break;
+
+        if (strcmp(buffer, "exit") == 0) break;
     }
 
     close(socketPlayer1);
@@ -152,7 +187,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // Crear socket
+   
     socketfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (socketfd < 0) showError("Error creando socket");
 
@@ -178,16 +213,16 @@ int main(int argc, char *argv[]) {
 
         if (socketPlayer1 == -1) {
             socketPlayer1 = newSocket;
-            send(socketPlayer1, "Esperando otro jugador...\n", 27, 0);
+         
         } else {
             socketPlayer2 = newSocket;
 
-            // Crear args para el hilo
+
             threadArgs = malloc(sizeof(tThreadArgs));
             threadArgs->socketPlayer1 = socketPlayer1;
             threadArgs->socketPlayer2 = socketPlayer2;
 
-            // Lanzar hilo para la partida
+        
             pthread_create(&threadID, NULL, handleGame, threadArgs);
             pthread_detach(threadID);
 

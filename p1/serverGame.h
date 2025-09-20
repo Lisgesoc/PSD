@@ -105,3 +105,6 @@ unsigned int calculatePoints (tDeck *deck);
  */
 unsigned int getRandomCard (tDeck* deck);
  
+int sendMessage(int socket, const char *msg);
+
+int recvMessage(int socket, char *buffer, size_t bufferSize);
