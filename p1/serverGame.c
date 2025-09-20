@@ -144,26 +144,36 @@ void *handleGame(void *args) {
 
 
     tSession session;
-    initSession(&session);
+  
 
     printf("Nueva partida creada entre sockets %d y %d\n", socketPlayer1, socketPlayer2);
 
     char buffer[MAX_MSG_LENGTH];
-    
+     memset(buffer, 0, MAX_MSG_LENGTH);
+     recvMessage(socketPlayer1, buffer, MAX_MSG_LENGTH-1);
+     printf("Nombre de jugador de jugador 1: %s\n", buffer); 
+     strncpy(session.player1Name, buffer, STRING_LENGTH-1);
+
+     memset(buffer, 0, MAX_MSG_LENGTH);
+     recvMessage(socketPlayer2, buffer, MAX_MSG_LENGTH-1);
+     printf("Nombre de jugador de jugador 2: %s\n", buffer); 
+     strncpy(session.player2Name, buffer, STRING_LENGTH-1);
+     initSession(&session);
+     printSession(&session);
+
     while (1) {
-   
+       
+
+        //Bucle principal del juego por implementar ...
         memset(buffer, 0, MAX_MSG_LENGTH);
         if (recvMessage(socketPlayer1, buffer, MAX_MSG_LENGTH-1) < 0) break;
         if (sendMessage(socketPlayer2, buffer) < 0) break;
-
-        if (strcmp(buffer, "exit") == 0) break;
-
-      
+    
+        
         memset(buffer, 0, MAX_MSG_LENGTH);
         if (recvMessage(socketPlayer2, buffer, MAX_MSG_LENGTH-1) < 0) break;
         if (sendMessage(socketPlayer1, buffer) < 0) break;
 
-        if (strcmp(buffer, "exit") == 0) break;
     }
 
     close(socketPlayer1);

@@ -130,21 +130,25 @@ int main(int argc, char *argv[]){
 		if (connect(socketfd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0)
 			showError("ERROR while establishing connection");
 
+		printf("Introduce tu nombre: ");
+		memset(buffer, 0, MAX_MSG_LENGTH);
+		fgets(buffer, MAX_MSG_LENGTH-1, stdin);
+		sendMessage(socketfd, buffer);	
+
+
 
 		while(strcmp(buffer, "exit") != 0){
-			// Init and read the message
+		
+			//Bucle principal del jugador por implementar ...
 			printf("Enter a message: ");
 			memset(buffer, 0, MAX_MSG_LENGTH);
 			fgets(buffer, MAX_MSG_LENGTH-1, stdin);
-			
-			// Send message to the server side
-		  	sendMessage(socketfd, buffer);
-		
-			// Init for reading incoming message
+  			sendMessage(socketfd, buffer);
+
 			memset(buffer, 0, MAX_MSG_LENGTH);
 			recvMessage(socketfd, buffer,  MAX_MSG_LENGTH-1);
-		
-			printf("%s\n",buffer);
+			printf("Mensaje: %s\n", buffer); 
+	
 		}
 		// Close socket
 		close(socketfd);
