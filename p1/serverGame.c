@@ -1,6 +1,7 @@
 #include "serverGame.h"
 #include <pthread.h>
 
+
 tPlayer getNextPlayer (tPlayer currentPlayer){
 
 	tPlayer next;
@@ -103,7 +104,7 @@ unsigned int getRandomCard (tDeck* deck){
 
 int sendMessage(int socket, const char *msg) {
     int len = strlen(msg);
-    int tam = send(socket, &len, sizeof(1), 0);
+    int tam = send(socket, &len, sizeof(len), 0);
     int mens = send(socket, msg, len, 0);
 
     if (tam < 0 || mens < 0) {
@@ -115,14 +116,11 @@ int sendMessage(int socket, const char *msg) {
 
 int recvMessage(int socket, char *buffer, size_t bufferSize) {
     int len;
-    int rec = recv(socket, &len, sizeof(len), 0);  
+    int rec = recv(socket, &len, sizeof(len), 0); 
+  
+
     if (rec <= 0) {
         perror("Error al recibir tamaño de mensaje");
-        return -1;
-    }
-
-    if (len >= bufferSize) {
-        fprintf(stderr, "Mensaje demasiado largo (%d bytes, buffer %zu)\n", len, bufferSize);
         return -1;
     }
 
@@ -136,6 +134,16 @@ int recvMessage(int socket, char *buffer, size_t bufferSize) {
     return 0;
 }
 
+void *sendUnsignedInt(int socket, unsigned int value) {
+    int tam = send(socket, &value, sizeof(value), 0);
+
+    if (tam < 0) {
+        perror("Error al enviar unsigned int");
+        return NULL;
+    }
+    return NULL;
+}
+
 
 void *handleGame(void *args) {
     tThreadArgs *threadArgs = (tThreadArgs *) args;
@@ -144,7 +152,6 @@ void *handleGame(void *args) {
 
 
     tSession session;
-  
 
     printf("Nueva partida creada entre sockets %d y %d\n", socketPlayer1, socketPlayer2);
 
@@ -163,16 +170,13 @@ void *handleGame(void *args) {
 
     while (1) {
        
+        //El servidor enviará, a jugA, el código TURN_BET y su stack.
+        sendUnsignedInt(socketPlayer1, TURN_BET);
+        sendUnsignedInt(socketPlayer1, session.player1Stack);
 
-        //Bucle principal del juego por implementar ...
-        memset(buffer, 0, MAX_MSG_LENGTH);
-        if (recvMessage(socketPlayer1, buffer, MAX_MSG_LENGTH-1) < 0) break;
-        if (sendMessage(socketPlayer2, buffer) < 0) break;
-    
-        
-        memset(buffer, 0, MAX_MSG_LENGTH);
-        if (recvMessage(socketPlayer2, buffer, MAX_MSG_LENGTH-1) < 0) break;
-        if (sendMessage(socketPlayer1, buffer) < 0) break;
+        sendUnsignedInt(socketPlayer2, TURN_BET);
+        sendUnsignedInt(socketPlayer2, session.player1Stack);
+      
 
     }
 
@@ -196,8 +200,6 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Uso: %s <puerto>\n", argv[0]);
         exit(1);
     }
-
-   
     socketfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (socketfd < 0) showError("Error creando socket");
 

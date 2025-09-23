@@ -1,5 +1,6 @@
 #include "clientGame.h"
 
+
 unsigned int readBet (){
 
 	int isValid, bet=0;
@@ -62,15 +63,10 @@ int sendMessage(int socket, const char *msg) {
 }
 
 int recvMessage(int socket, char *buffer, size_t bufferSize) {
-    int len;
+	int len;
     int rec = recv(socket, &len, sizeof(len), 0);  
     if (rec <= 0) {
         perror("Error al recibir tamaño de mensaje");
-        return -1;
-    }
-
-    if (len >= bufferSize) {
-        fprintf(stderr, "Mensaje demasiado largo (%d bytes, buffer %zu)\n", len, bufferSize);
         return -1;
     }
 
@@ -139,15 +135,16 @@ int main(int argc, char *argv[]){
 
 		while(strcmp(buffer, "exit") != 0){
 		
-			//Bucle principal del jugador por implementar ...
-			printf("Enter a message: ");
+			unsigned int code;
 			memset(buffer, 0, MAX_MSG_LENGTH);
+			recv(socketfd, &code, sizeof(code), 0);
+			printf("Código recibido: %u\n", code);
+			recv(socketfd, &code, sizeof(code), 0);
+			printf("Código recibido: %u\n", code);; 
+			printf("Introduce apuesta: "); 
 			fgets(buffer, MAX_MSG_LENGTH-1, stdin);
-  			sendMessage(socketfd, buffer);
+			sendMessage(socketfd, buffer);	
 
-			memset(buffer, 0, MAX_MSG_LENGTH);
-			recvMessage(socketfd, buffer,  MAX_MSG_LENGTH-1);
-			printf("Mensaje: %s\n", buffer); 
 	
 		}
 		// Close socket
