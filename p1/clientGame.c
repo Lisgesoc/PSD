@@ -1,5 +1,5 @@
 #include "clientGame.h"
-
+#include <stdbool.h>
 
 unsigned int readBet (){
 
@@ -131,22 +131,44 @@ int main(int argc, char *argv[]){
 		fgets(buffer, MAX_MSG_LENGTH-1, stdin);
 		sendMessage(socketfd, buffer);	
 
-
-
-		while(strcmp(buffer, "exit") != 0){
-		
-			unsigned int code;
-			memset(buffer, 0, MAX_MSG_LENGTH);
-			recv(socketfd, &code, sizeof(code), 0);
-			printf("Código recibido: %u\n", code);
-			recv(socketfd, &code, sizeof(code), 0);
-			printf("Código recibido: %u\n", code);; 
-			printf("Introduce apuesta: "); 
-			fgets(buffer, MAX_MSG_LENGTH-1, stdin);
-			sendMessage(socketfd, buffer);	
-
+		while (1) {
 	
-		}
+    		recv(socketfd, &code, sizeof(code), 0);
+    		if (code != TURN_BET) break; 
+    		unsigned int stack;
+    		recv(socketfd, &stack, sizeof(stack), 0);
+   			printf("Tu stack: %u\n", stack);
+			bool validBet = false;
+   		
+    		while (!validBet) {
+			   printf("validBet: %d\n", validBet);
+        		unsigned int bet = readBet();
+        		send(socketfd, &bet, sizeof(bet), 0);
+        		recv(socketfd, &code, sizeof(code), 0);
+			
+        		if (code == TURN_BET_OK) {
+            		printf("Comienza el juego.\n");
+            		validBet = true; 
+					/*while(1){
+						recv(socketfd, &code, sizeof(code), 0);
+						if (code == TURN_PLAY){
+							//TODO
+						}
+						else if (code == TURN_PLAY_WAIT){
+							//TODO
+						}
+						
+					}
+					break;	
+					}*/
+        		} else if (code == TURN_BET) {
+            		printf("Apuesta incorrecta, intenta de nuevo.\n");
+        		} else {
+            		printf("Código inesperado: %u\n", code);
+            	
+        	}
+    	}
+}
 		// Close socket
 		close(socketfd);
 

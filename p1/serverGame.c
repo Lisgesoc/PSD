@@ -1,6 +1,6 @@
 #include "serverGame.h"
 #include <pthread.h>
-
+#include <stdbool.h>
 
 tPlayer getNextPlayer (tPlayer currentPlayer){
 
@@ -134,7 +134,7 @@ int recvMessage(int socket, char *buffer, size_t bufferSize) {
     return 0;
 }
 
-void *sendUnsignedInt(int socket, unsigned int value) {
+void *sendCode(int socket, unsigned int value) {
     int tam = send(socket, &value, sizeof(value), 0);
 
     if (tam < 0) {
@@ -144,7 +144,36 @@ void *sendUnsignedInt(int socket, unsigned int value) {
     return NULL;
 }
 
+int gestionarApuesta(int socketJugador, unsigned int stackJugador, unsigned int *betPtr) {
+    sendCode(socketJugador, TURN_BET);
+    sendCode(socketJugador, stackJugador);
 
+    unsigned int bet;
+    bool isValid = FALSE;
+    while (!isValid) {
+        int rec = recv(socketJugador, &bet, sizeof(bet), 0);
+        if (rec <= 0) return -1; 
+
+        if (bet > 0 && bet <= stackJugador) {
+            *betPtr = bet;
+            sendCode(socketJugador, TURN_BET_OK);
+            isValid = TRUE;
+        } else {
+            sendCode(socketJugador, TURN_BET);
+        }
+    }
+    return 0;
+}
+
+
+int gameStart() {
+    while (1)
+    {
+        /* TODO */
+    }
+    
+    return 0;
+}
 void *handleGame(void *args) {
     tThreadArgs *threadArgs = (tThreadArgs *) args;
     int socketPlayer1 = threadArgs->socketPlayer1;
@@ -169,15 +198,11 @@ void *handleGame(void *args) {
      printSession(&session);
 
     while (1) {
-       
-        //El servidor enviará, a jugA, el código TURN_BET y su stack.
-        sendUnsignedInt(socketPlayer1, TURN_BET);
-        sendUnsignedInt(socketPlayer1, session.player1Stack);
-
-        sendUnsignedInt(socketPlayer2, TURN_BET);
-        sendUnsignedInt(socketPlayer2, session.player1Stack);
-      
-
+   
+        gestionarApuesta(socketPlayer1, session.player1Stack, &session.player1Bet);
+        gestionarApuesta(socketPlayer2, session.player1Stack, &session.player2Bet);
+        gameStart();
+ 
     }
 
     close(socketPlayer1);
