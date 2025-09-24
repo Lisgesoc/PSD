@@ -89,6 +89,7 @@ int main(int argc, char *argv[]){
 	unsigned int endOfGame;				/** Flag to control the end of the game */
 	tString playerName;					/** Name of the player */
 	unsigned int code;					/** Code */
+	unsigned int stack;
 
 
 		// Check arguments!
@@ -135,13 +136,13 @@ int main(int argc, char *argv[]){
 	
     		recv(socketfd, &code, sizeof(code), 0);
     		if (code != TURN_BET) break; 
-    		unsigned int stack;
+    		
     		recv(socketfd, &stack, sizeof(stack), 0);
    			printf("Tu stack: %u\n", stack);
 			bool validBet = false;
    		
     		while (!validBet) {
-			   printf("validBet: %d\n", validBet);
+			//   printf("validBet: %d\n", validBet);
         		unsigned int bet = readBet();
         		send(socketfd, &bet, sizeof(bet), 0);
         		recv(socketfd, &code, sizeof(code), 0);
@@ -149,18 +150,22 @@ int main(int argc, char *argv[]){
         		if (code == TURN_BET_OK) {
             		printf("Comienza el juego.\n");
             		validBet = true; 
-					/*while(1){
-						recv(socketfd, &code, sizeof(code), 0);
+					recv(socketfd, &code, sizeof(code), 0);
+					printf("game code recivido.\n");
+					while((code != TURN_GAME_LOSE )|| (code != TURN_GAME_WIN ) ){
+						printf("Dento del while.\n");
 						if (code == TURN_PLAY){
 							//TODO
+							printf("jugador 1");
 						}
 						else if (code == TURN_PLAY_WAIT){
 							//TODO
+							printf("jugador 2");
 						}
-						
+							printf("Estamoss???");
 					}
-					break;	
-					}*/
+						
+					
         		} else if (code == TURN_BET) {
             		printf("Apuesta incorrecta, intenta de nuevo.\n");
         		} else {
