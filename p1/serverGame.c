@@ -162,15 +162,14 @@ int gestionarApuesta(int socketJugador, unsigned int stackJugador, unsigned int 
             sendCode(socketJugador, TURN_BET);
         }
     }
+   
     return 0;
 }
 
 
-int gameStart() {
-    while (1)
-    {
-        /* TODO */
-    }
+int gameStart(int socketJugador,unsigned int code) {
+  
+    sendCode(socketJugador, code);
     
     return 0;
 }
@@ -201,7 +200,8 @@ void *handleGame(void *args) {
    
         gestionarApuesta(socketPlayer1, session.player1Stack, &session.player1Bet);
         gestionarApuesta(socketPlayer2, session.player1Stack, &session.player2Bet);
-        gameStart();
+        gameStart(socketPlayer1,TURN_PLAY);
+        gameStart(socketPlayer2,TURN_PLAY_WAIT);
  
     }
 
