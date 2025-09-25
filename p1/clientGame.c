@@ -79,6 +79,44 @@ int recvMessage(int socket, char *buffer, size_t bufferSize) {
     buffer[recMsg] = '\0';  
     return 0;
 }
+void *sendCode(int socket, unsigned int value) {
+    int tam = send(socket, &value, sizeof(value), 0);
+
+    if (tam < 0) {
+        perror("Error al enviar unsigned int");
+        return NULL;
+    }
+    return NULL;
+}
+
+void recibirEstadoJugador(int socket) {
+    unsigned int code = 0;
+    unsigned int numCartas = 0;
+
+    memset(&code, 0, sizeof(code));
+    recv(socket, &code, sizeof(code), 0);
+
+    memset(&numCartas, 0, sizeof(numCartas));
+    recv(socket, &numCartas, sizeof(numCartas), 0);
+
+    printf("Numero de cartas del jugador: %u\n", numCartas);
+
+    if (numCartas > 0) {
+        unsigned int cartas[DECK_SIZE];
+        int bytesEsperados = sizeof(unsigned int) * numCartas;
+        int bytesRecibidos = recv(socket, cartas, bytesEsperados, 0);
+        if (bytesRecibidos != bytesEsperados) {
+            perror("Error al recibir las cartas del jugador");
+            return;
+        }
+        printf("Cartas del jugador: ");
+        for (unsigned int i = 0; i < numCartas; i++) {
+            printf("%u ", cartas[i]);
+        }
+        printf("\n");
+	}
+	
+}
 
 int main(int argc, char *argv[]){
 
@@ -86,11 +124,10 @@ int main(int argc, char *argv[]){
 	unsigned int port;					/** Port number (server) */
 	struct sockaddr_in server_address;	/** Server address structure */
 	char* serverIP;						/** Server IP */
-	unsigned int endOfGame;				/** Flag to control the end of the game */
+//	unsigned int endOfGame;				/** Flag to control the end of the game */
 	tString playerName;					/** Name of the player */
 	unsigned int code;					/** Code */
 	unsigned int stack;
-
 
 		// Check arguments!
 		if (argc != 3){
@@ -105,10 +142,9 @@ int main(int argc, char *argv[]){
 		// Get the port
 		port = atoi(argv[2]);
 
-		/*TODO*/
 		
 		char buffer[MAX_MSG_LENGTH];
-		ssize_t msgLength;
+		
 
 		// Create socket
 		socketfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -130,10 +166,14 @@ int main(int argc, char *argv[]){
 		printf("Introduce tu nombre: ");
 		memset(buffer, 0, MAX_MSG_LENGTH);
 		fgets(buffer, MAX_MSG_LENGTH-1, stdin);
+		buffer[strcspn(buffer, "\n")] = 0; 
+        strncpy(playerName, buffer, STRING_LENGTH-1); 
+        playerName[STRING_LENGTH-1] = '\0'; 
 		sendMessage(socketfd, buffer);	
 
 		while (1) {
 	
+			
     		recv(socketfd, &code, sizeof(code), 0);
     		if (code != TURN_BET) break; 
     		
@@ -142,7 +182,6 @@ int main(int argc, char *argv[]){
 			bool validBet = false;
    		
     		while (!validBet) {
-			//   printf("validBet: %d\n", validBet);
         		unsigned int bet = readBet();
         		send(socketfd, &bet, sizeof(bet), 0);
         		recv(socketfd, &code, sizeof(code), 0);
@@ -151,18 +190,24 @@ int main(int argc, char *argv[]){
             		printf("Comienza el juego.\n");
             		validBet = true; 
 					recv(socketfd, &code, sizeof(code), 0);
-					printf("game code recivido.\n");
-					while((code != TURN_GAME_LOSE )|| (code != TURN_GAME_WIN ) ){
-						printf("Dento del while.\n");
+
+					while((code != TURN_GAME_LOSE )&& (code != TURN_GAME_WIN ) ){
+
 						if (code == TURN_PLAY){
-							//TODO
-							printf("jugador 1");
+							
+							printf("Jugador activo.\n");
+							recibirEstadoJugador(socketfd);
+							unsigned int option = readOption();
+							sendCode(socketfd, option);
+							
 						}
 						else if (code == TURN_PLAY_WAIT){
 							//TODO
-							printf("jugador 2");
+							printf("Jugador pasivo.\n");
+							while(1);
+							//recibirEstadoJugador(socketfd);
 						}
-							printf("Estamoss???");
+							;
 					}
 						
 					

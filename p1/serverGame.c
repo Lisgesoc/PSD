@@ -166,20 +166,28 @@ int gestionarApuesta(int socketJugador, unsigned int stackJugador, unsigned int 
     return 0;
 }
 
-
+//Hacer la comprovacion de errores
 int gameStart(int socketJugador,unsigned int code) {
-  
     sendCode(socketJugador, code);
-    
     return 0;
 }
+
+void enviarEstadoJugador(int socket, tDeck *deck,unsigned int code) {
+    sendCode(socket, code);
+    sendCode(socket, deck->numCards);
+    
+    printf("Numero de cartas del jugador: %u\n", deck->numCards);
+    send(socket, deck->cards, sizeof(unsigned int) * deck->numCards, 0);
+}
+
+
 void *handleGame(void *args) {
+    tSession session;
+    unsigned int code;					
+
     tThreadArgs *threadArgs = (tThreadArgs *) args;
     int socketPlayer1 = threadArgs->socketPlayer1;
     int socketPlayer2 = threadArgs->socketPlayer2;
-
-
-    tSession session;
 
     printf("Nueva partida creada entre sockets %d y %d\n", socketPlayer1, socketPlayer2);
 
@@ -193,18 +201,32 @@ void *handleGame(void *args) {
      recvMessage(socketPlayer2, buffer, MAX_MSG_LENGTH-1);
      printf("Nombre de jugador de jugador 2: %s\n", buffer); 
      strncpy(session.player2Name, buffer, STRING_LENGTH-1);
+
      initSession(&session);
      printSession(&session);
 
-    while (1) {
+     gestionarApuesta(socketPlayer1, session.player1Stack, &session.player1Bet);   
+     gestionarApuesta(socketPlayer2, session.player1Stack, &session.player2Bet);
    
-        gestionarApuesta(socketPlayer1, session.player1Stack, &session.player1Bet);
-        gestionarApuesta(socketPlayer2, session.player1Stack, &session.player2Bet);
-        gameStart(socketPlayer1,TURN_PLAY);
-        gameStart(socketPlayer2,TURN_PLAY_WAIT);
- 
-    }
+     gameStart(socketPlayer1, TURN_PLAY);
+     enviarEstadoJugador(socketPlayer1, &session.player1Deck,TURN_PLAY);
 
+        while (1) {
+
+            recv(socketPlayer1, &code, sizeof(code), 0);
+           
+            if (code == TURN_PLAY_HIT) {
+                session.player1Deck.cards[session.player1Deck.numCards] = getRandomCard(&session.gameDeck);
+                session.player1Deck.numCards++;
+                printSession(&session); 
+                enviarEstadoJugador(socketPlayer1, &session.player1Deck,TURN_PLAY);
+            } else if (code == TURN_PLAY_STAND) {
+                printf("El jugador se planta.\n");
+                
+            }
+      
+        }
+        
     close(socketPlayer1);
     close(socketPlayer2);
     free(threadArgs);
@@ -215,7 +237,8 @@ void *handleGame(void *args) {
 
 int main(int argc, char *argv[]) {
     int socketfd;
-    struct sockaddr_in serverAddress, player1Address, player2Address;
+    struct sockaddr_in serverAddress, player1Address;
+    //, player2Address
     unsigned int port, clientLength;
     int socketPlayer1 = -1, socketPlayer2;
     tThreadArgs *threadArgs;
