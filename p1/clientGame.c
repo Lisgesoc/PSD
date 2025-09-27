@@ -89,9 +89,10 @@ void *sendCode(int socket, unsigned int value) {
     return NULL;
 }
 
-void recibirEstadoJugador(int socket) {
-    unsigned int code = 0;
-    unsigned int numCartas = 0;
+unsigned int recibirEstadoJugador(int socket) {
+    unsigned int code;
+    unsigned int numCartas;
+	unsigned int puntos; 
 
     memset(&code, 0, sizeof(code));
     recv(socket, &code, sizeof(code), 0);
@@ -99,15 +100,20 @@ void recibirEstadoJugador(int socket) {
     memset(&numCartas, 0, sizeof(numCartas));
     recv(socket, &numCartas, sizeof(numCartas), 0);
 
+	memset(&puntos, 0, sizeof(puntos));
+    recv(socket, &puntos, sizeof(puntos), 0);
+
     printf("Numero de cartas del jugador: %u\n", numCartas);
+	printf("Numero de puntos del jugador: %u\n", puntos);
 
     if (numCartas > 0) {
         unsigned int cartas[DECK_SIZE];
         int bytesEsperados = sizeof(unsigned int) * numCartas;
+		memset(cartas, 0, sizeof(cartas));
         int bytesRecibidos = recv(socket, cartas, bytesEsperados, 0);
-        if (bytesRecibidos != bytesEsperados) {
-            perror("Error al recibir las cartas del jugador");
-            return;
+    	 if (bytesRecibidos != bytesEsperados) {
+              perror("Error al recibir las cartas del jugador");
+            return code;
         }
         printf("Cartas del jugador: ");
         for (unsigned int i = 0; i < numCartas; i++) {
@@ -115,7 +121,7 @@ void recibirEstadoJugador(int socket) {
         }
         printf("\n");
 	}
-	
+	return code;
 }
 
 int main(int argc, char *argv[]){
@@ -124,7 +130,7 @@ int main(int argc, char *argv[]){
 	unsigned int port;					/** Port number (server) */
 	struct sockaddr_in server_address;	/** Server address structure */
 	char* serverIP;						/** Server IP */
-//	unsigned int endOfGame;				/** Flag to control the end of the game */
+	//unsigned int endOfGame =0;			/** Flag to control the end of the game */
 	tString playerName;					/** Name of the player */
 	unsigned int code;					/** Code */
 	unsigned int stack;
@@ -171,43 +177,48 @@ int main(int argc, char *argv[]){
         playerName[STRING_LENGTH-1] = '\0'; 
 		sendMessage(socketfd, buffer);	
 
-		while (1) {
+		
 	
-			
-    		recv(socketfd, &code, sizeof(code), 0);
-    		if (code != TURN_BET) break; 
-    		
-    		recv(socketfd, &stack, sizeof(stack), 0);
-   			printf("Tu stack: %u\n", stack);
-			bool validBet = false;
-   		
-    		while (!validBet) {
-        		unsigned int bet = readBet();
-        		send(socketfd, &bet, sizeof(bet), 0);
-        		recv(socketfd, &code, sizeof(code), 0);
-			
-        		if (code == TURN_BET_OK) {
-            		printf("Comienza el juego.\n");
-            		validBet = true; 
-					recv(socketfd, &code, sizeof(code), 0);
+    	recv(socketfd, &code, sizeof(code), 0); //Recibir code
+    	recv(socketfd, &stack, sizeof(stack), 0); //Recibir stack
 
+   		printf("Tu stack: %u\n", stack);
+		bool validBet = false;
+   		
+    	while (!validBet) {
+        	unsigned int bet = readBet();
+        	send(socketfd, &bet, sizeof(bet), 0);
+			memset(&code, 0, sizeof(code));
+    		recv(socketfd, &code, sizeof(code), 0);
+		
+       		if (code == TURN_BET_OK) {
+           		printf("Apuesta realizada.\n");
+           		validBet = true; 
+			
+		   		memset(&code, 0, sizeof(code));
+			
+			
 					while((code != TURN_GAME_LOSE )&& (code != TURN_GAME_WIN ) ){
 
-						if (code == TURN_PLAY){
-							
+						unsigned int newCode = recibirEstadoJugador(socketfd);
+						printf("EL codigo es: %u \n", newCode);
+						printf(" \n");
+						printf(" \n");
+                 
+						if (newCode == TURN_PLAY){
+						
 							printf("Jugador activo.\n");
-							recibirEstadoJugador(socketfd);
+							
 							unsigned int option = readOption();
 							sendCode(socketfd, option);
 							
 						}
-						else if (code == TURN_PLAY_WAIT){
-							//TODO
+						else if (newCode == TURN_PLAY_WAIT){
 							printf("Jugador pasivo.\n");
-							while(1);
-							//recibirEstadoJugador(socketfd);
 						}
-							;
+						else if(newCode ==TURN_PLAY_OUT){
+							printf("Has superado los puntos permitidos. \n");
+						}
 					}
 						
 					
@@ -218,7 +229,7 @@ int main(int argc, char *argv[]){
             	
         	}
     	}
-}
+
 		// Close socket
 		close(socketfd);
 
