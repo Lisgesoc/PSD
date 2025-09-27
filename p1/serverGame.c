@@ -184,11 +184,12 @@ void enviarEstadoJugador(int socket, tDeck *deck,unsigned int code) {
 }
 
 
+
+        
 void *handleGame(void *args) {
     tSession session;
-    unsigned int code;	
-    unsigned int jugadorActivo=0 ;	
-    unsigned int partidaFinalizada=0;			
+    unsigned int code;    
+    unsigned int partidaFinalizada = 0;            
 
     tThreadArgs *threadArgs = (tThreadArgs *) args;
     int socketPlayer1 = threadArgs->socketPlayer1;
@@ -197,96 +198,71 @@ void *handleGame(void *args) {
     printf("Nueva partida creada entre sockets %d y %d\n", socketPlayer1, socketPlayer2);
 
     char buffer[MAX_MSG_LENGTH];
-     memset(buffer, 0, MAX_MSG_LENGTH);
-     recvMessage(socketPlayer1, buffer, MAX_MSG_LENGTH-1);
-     printf("Nombre de jugador de jugador 1: %s\n", buffer); 
-     strncpy(session.player1Name, buffer, STRING_LENGTH-1);
+    memset(buffer, 0, MAX_MSG_LENGTH);
+    recvMessage(socketPlayer1, buffer, MAX_MSG_LENGTH-1);
+    printf("Nombre de jugador de jugador 1: %s\n", buffer); 
+    strncpy(session.player1Name, buffer, STRING_LENGTH-1);
 
-     memset(buffer, 0, MAX_MSG_LENGTH);
-     recvMessage(socketPlayer2, buffer, MAX_MSG_LENGTH-1);
-     printf("Nombre de jugador de jugador 2: %s\n", buffer); 
-     strncpy(session.player2Name, buffer, STRING_LENGTH-1);
+    memset(buffer, 0, MAX_MSG_LENGTH);
+    recvMessage(socketPlayer2, buffer, MAX_MSG_LENGTH-1);
+    printf("Nombre de jugador de jugador 2: %s\n", buffer); 
+    strncpy(session.player2Name, buffer, STRING_LENGTH-1);
 
-     initSession(&session);
-     printSession(&session);
+    initSession(&session);
+    printSession(&session);
 
-     while(partidaFinalizada == 0){
-     gestionarApuesta(socketPlayer1, session.player1Stack, &session.player1Bet);   
-     gestionarApuesta(socketPlayer2, session.player2Stack, &session.player2Bet);
    
-    
-     enviarEstadoJugador(socketPlayer1, &session.player1Deck,TURN_PLAY);
+    tPlayer jugadorActivo = player1;
+    int *socketActivo = &socketPlayer1;
+    int *socketPasivo = &socketPlayer2;
+
+    while(partidaFinalizada == 0){
+        gestionarApuesta(socketPlayer1, session.player1Stack, &session.player1Bet);   
+        gestionarApuesta(socketPlayer2, session.player2Stack, &session.player2Bet);
+
+        enviarEstadoJugador(socketPlayer1, &session.player1Deck, TURN_PLAY);
 
         while (1) {
-         
-            if(jugadorActivo == 0){
-                   printf("socket 111111111111 \n");
-            recv(socketPlayer1, &code, sizeof(code), 0);
-           
+            
+            recv(*socketActivo, &code, sizeof(code), 0);
+
+            tDeck *deckActivo = (jugadorActivo == player1) ? &session.player1Deck : &session.player2Deck;
+            tDeck *deckPasivo = (jugadorActivo == player1) ? &session.player2Deck : &session.player1Deck;
+
             if (code == TURN_PLAY_HIT) {
-                session.player1Deck.cards[session.player1Deck.numCards] = getRandomCard(&session.gameDeck);
-                session.player1Deck.numCards++;
+                deckActivo->cards[deckActivo->numCards] = getRandomCard(&session.gameDeck);
+                deckActivo->numCards++;
                 printSession(&session); 
-               
-                if(calculatePoints(&session.player1Deck) > GOAL_GAME){
+
+                if(calculatePoints(deckActivo) > GOAL_GAME){
                     printf("El jugador ha superado los puntos permitidos \n");
 
-                    enviarEstadoJugador(socketPlayer1, &session.player1Deck,TURN_PLAY_OUT);
-                    enviarEstadoJugador(socketPlayer2, &session.player1Deck,TURN_PLAY);
-                    jugadorActivo = 1;    
-                }else{
-                    enviarEstadoJugador(socketPlayer1, &session.player1Deck,TURN_PLAY);
-                    enviarEstadoJugador(socketPlayer2, &session.player1Deck,TURN_PLAY_WAIT);
+                    enviarEstadoJugador(*socketActivo, deckActivo, TURN_PLAY_OUT);
+                    enviarEstadoJugador(*socketPasivo, deckActivo, TURN_PLAY);
+                    // Cambiar jugador activo
+                    jugadorActivo = getNextPlayer(jugadorActivo);
+                    int *tmp = socketActivo;
+                    socketActivo = socketPasivo;
+                    socketPasivo = tmp;
+                } else {
+                    enviarEstadoJugador(*socketActivo, deckActivo, TURN_PLAY);
+                    enviarEstadoJugador(*socketPasivo, deckActivo, TURN_PLAY_WAIT);
                 }
-                
-                
-                
-            } else if (code == TURN_PLAY_STAND) {
-                printf("El jugador se planta.\n");
-             
-                enviarEstadoJugador(socketPlayer1, &session.player1Deck, TURN_PLAY_WAIT);
-                enviarEstadoJugador(socketPlayer2, &session.player2Deck, TURN_PLAY);
-                
-                jugadorActivo = 1;
-               
-                
-            }
-        }else{
-            printf("socket 222222222222 \n");
-            recv(socketPlayer2, &code, sizeof(code), 0);
-           
-            if (code == TURN_PLAY_HIT) {
-                session.player2Deck.cards[session.player2Deck.numCards] = getRandomCard(&session.gameDeck);
-                session.player2Deck.numCards++;
-                printSession(&session); 
-                
-                if(calculatePoints(&session.player2Deck) > GOAL_GAME){
-                    printf("El jugador ha superado los puntos permitidos \n");
-                   
-                    jugadorActivo = 0;    
-                    enviarEstadoJugador(socketPlayer2, &session.player2Deck,TURN_PLAY_OUT);
-                    enviarEstadoJugador(socketPlayer1, &session.player2Deck,TURN_PLAY);
-                }else{
-                    enviarEstadoJugador(socketPlayer2, &session.player2Deck,TURN_PLAY);
-                    enviarEstadoJugador(socketPlayer1, &session.player2Deck,TURN_PLAY_WAIT);
-                }
-              
-                
-                
-            } else if (code == TURN_PLAY_STAND) {
-                printf("El jugador se planta.\n");
-                sendCode(socketPlayer2,TURN_PLAY_WAIT);
-                
-                enviarEstadoJugador(socketPlayer2, &session.player2Deck, TURN_PLAY_WAIT);
-                enviarEstadoJugador(socketPlayer1, &session.player1Deck, TURN_PLAY);
-                jugadorActivo = 0;
 
+            } else if (code == TURN_PLAY_STAND) {
+                printf("El jugador se planta.\n");
+                enviarEstadoJugador(*socketActivo, deckActivo, TURN_PLAY_WAIT);
+                enviarEstadoJugador(*socketPasivo, deckPasivo, TURN_PLAY);
+
+                // Cambiar jugador activo
+                jugadorActivo = getNextPlayer(jugadorActivo);
+                int *tmp = socketActivo;
+                socketActivo = socketPasivo;
+                socketPasivo = tmp;
             }
-        }
-      
         }
     }
-        
+
     close(socketPlayer1);
     close(socketPlayer2);
     free(threadArgs);
@@ -294,6 +270,7 @@ void *handleGame(void *args) {
     printf("Partida finalizada\n");
     return NULL;
 }
+
 
 int main(int argc, char *argv[]) {
     int socketfd;
