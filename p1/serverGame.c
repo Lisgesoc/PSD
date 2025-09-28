@@ -215,15 +215,17 @@ void *handleGame(void *args) {
     sendCode(socketPlayer1, TURN_BET);
     sendCode(socketPlayer2, TURN_BET);
 
-	while (partidaFinalizada == 0) {
 
-		tPlayer jugadorActivo = player1;
+	tPlayer jugadorActivo = player1;
 		int *socketActivo = &socketPlayer1;
 		int *socketPasivo = &socketPlayer2;
+	while (partidaFinalizada == 0) {
+
+		
         printf("Stacks iniciales: %s: %d, %s: %d\n", session.player1Name,session.player1Stack, session.player2Name,session.player2Stack);
 
-		gestionarApuesta(socketPlayer1, session.player1Stack, &session.player1Bet);
-		gestionarApuesta(socketPlayer2, session.player2Stack, &session.player2Bet);
+		gestionarApuesta(*socketActivo, session.player1Stack, &session.player1Bet);
+		gestionarApuesta(*socketPasivo, session.player2Stack, &session.player2Bet);
       
 		if (session.player1Bet > session.player2Bet) {
             session.player1Bet = session.player2Bet;
@@ -232,7 +234,7 @@ void *handleGame(void *args) {
 			session.player2Bet = session.player1Bet;
 		}
 
-		enviarEstadoJugador(socketPlayer1, &session.player1Deck, TURN_PLAY);
+		enviarEstadoJugador(*socketActivo, &session.player1Deck, TURN_PLAY);
 
 		while (apuestaJugadores < 2) {
 
@@ -317,7 +319,12 @@ void *handleGame(void *args) {
 			session.player2Stack += session.player2Bet;
 			session.player1Stack -= session.player1Bet;
 			jugadorActivo = getNextPlayer(jugadorActivo);
+		}else if( puntosJugador1 == puntosJugador2){
+			printf("Empate!\n");
+			enviarEstadoJugador(socketPlayer1, &session.player1Deck, TURN_GAME_WIN);
+			enviarEstadoJugador(socketPlayer2, &session.player2Deck, TURN_GAME_WIN);
 		}
+
         apuestaJugadores = 0;
         session.player1Bet = 0;
         session.player2Bet = 0;
@@ -337,6 +344,8 @@ void *handleGame(void *args) {
             send(socketPlayer2, &session.player2Stack, sizeof(session.player2Stack), 0);
             sendCode(socketPlayer1, TURN_BET);
             sendCode(socketPlayer2, TURN_BET);
+			//
+			jugadorActivo = getNextPlayer(jugadorActivo);
         }
         
 	}
