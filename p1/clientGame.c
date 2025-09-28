@@ -130,7 +130,7 @@ int main(int argc, char *argv[]){
 	unsigned int port;					/** Port number (server) */
 	struct sockaddr_in server_address;	/** Server address structure */
 	char* serverIP;						/** Server IP */
-	//unsigned int endOfGame =0;			/** Flag to control the end of the game */
+	unsigned int endOfGame =0;			/** Flag to control the end of the game */
 	tString playerName;					/** Name of the player */
 	unsigned int code;					/** Code */
 	unsigned int stack;
@@ -183,6 +183,9 @@ int main(int argc, char *argv[]){
     	recv(socketfd, &stack, sizeof(stack), 0); //Recibir stack
 
    		printf("Tu stack: %u\n", stack);
+		while(endOfGame == 0){
+   		 	printf("Empieza una nueva ronda!\n");
+   		 	printf("Tu stack actual es: %u\n", stack);
 		bool validBet = false;
    		
     	while (!validBet) {
@@ -197,10 +200,11 @@ int main(int argc, char *argv[]){
 			
 		   		memset(&code, 0, sizeof(code));
 			
-			
-					while((code != TURN_GAME_LOSE )&& (code != TURN_GAME_WIN ) ){
-
-						unsigned int newCode = recibirEstadoJugador(socketfd);
+					unsigned int newCode =TURN_PLAY;
+					while((newCode != TURN_GAME_LOSE )&& (newCode != TURN_GAME_WIN ) ){
+						printf("Esperando recivir estado...\n");
+						printf("nnnnnnnn codigo es: %u \n", newCode);
+						newCode = recibirEstadoJugador(socketfd);
 						printf("EL codigo es: %u \n", newCode);
 						printf(" \n");
 						printf(" \n");
@@ -219,7 +223,16 @@ int main(int argc, char *argv[]){
 						else if(newCode ==TURN_PLAY_OUT){
 							printf("Has superado los puntos permitidos. \n");
 						}
+						else if(newCode ==TURN_GAME_LOSE){
+							printf("Has perdido la partida. \n");
+						
+						}
+						else if(newCode ==TURN_GAME_WIN){
+							printf("Has ganado la partida. \n");
+							
+						}
 					}
+					printf("La ronda ha terminad00000000o.\n");
 						
 					
         		} else if (code == TURN_BET) {
@@ -229,6 +242,7 @@ int main(int argc, char *argv[]){
             	
         	}
     	}
+	}
 
 		// Close socket
 		close(socketfd);
