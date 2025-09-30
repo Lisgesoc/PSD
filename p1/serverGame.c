@@ -185,6 +185,75 @@ void enviarEstadoJugador(int socket, tDeck *deck, unsigned int code) {
 
 }
 
+int procesarFinDeRonda(tSession *session, int socketPlayer1, int socketPlayer2) {
+    printf("Fin de la ronda. Calculando resultados...\n");
+
+    unsigned int puntosJugador1 = calculatePoints(&session->player1Deck);
+    unsigned int puntosJugador2 = calculatePoints(&session->player2Deck);
+
+    printf("Puntos %s: %u\n", session->player1Name, puntosJugador1);
+    printf("Puntos %s: %u\n", session->player2Name, puntosJugador2);
+
+    if ((puntosJugador1 > GOAL_GAME) && (puntosJugador2 > GOAL_GAME)) {
+        printf("Ambos jugadores han superado los puntos permitidos. Empate.\n");
+        enviarEstadoJugador(socketPlayer1, &session->player1Deck, TURN_GAME_WIN);
+        enviarEstadoJugador(socketPlayer2, &session->player2Deck, TURN_GAME_WIN);
+    } else if ((puntosJugador1 <= GOAL_GAME) && 
+               ((puntosJugador1 > puntosJugador2) || (puntosJugador2 > GOAL_GAME))) {
+
+        enviarEstadoJugador(socketPlayer1, &session->player1Deck, TURN_GAME_WIN);
+        enviarEstadoJugador(socketPlayer2, &session->player2Deck, TURN_GAME_LOSE);
+
+        session->player1Stack += session->player1Bet;
+        session->player2Stack -= session->player2Bet;
+
+    } else if ((puntosJugador2 <= GOAL_GAME) &&
+              ((puntosJugador2 > puntosJugador1) || (puntosJugador1 > GOAL_GAME))) {
+        printf("%s gana la partida!\n", session->player2Name);
+
+        enviarEstadoJugador(socketPlayer2, &session->player2Deck, TURN_GAME_WIN);
+        enviarEstadoJugador(socketPlayer1, &session->player1Deck, TURN_GAME_LOSE);
+
+        session->player2Stack += session->player2Bet;
+        session->player1Stack -= session->player1Bet;
+
+    } else if (puntosJugador1 == puntosJugador2) {
+        printf("Empate!\n");
+        enviarEstadoJugador(socketPlayer1, &session->player1Deck, TURN_GAME_WIN);
+        enviarEstadoJugador(socketPlayer2, &session->player2Deck, TURN_GAME_WIN);
+    }
+
+    
+    session->player1Bet = 0;
+    session->player2Bet = 0;
+    clearDeck(&session->player1Deck);
+    clearDeck(&session->player2Deck);
+
+    printf("Stacks finales: %s: %d, %s: %d\n",
+           session->player1Name, session->player1Stack,
+           session->player2Name, session->player2Stack);
+
+    
+    if (session->player1Stack == 0 || session->player2Stack == 0) {
+        send(socketPlayer1, &session->player1Stack, sizeof(session->player1Stack), 0);
+        send(socketPlayer2, &session->player2Stack, sizeof(session->player2Stack), 0);
+        sendCode(socketPlayer1, TURN_PLAY_OUT);
+        sendCode(socketPlayer2, TURN_PLAY_OUT);
+        printf("Un jugador se ha quedado sin fichas. Fin de la partida.\n");
+        return 1; 
+    }
+
+    // Preparar nueva ronda
+    initDeck(&session->gameDeck);
+    send(socketPlayer1, &session->player1Stack, sizeof(session->player1Stack), 0);
+    send(socketPlayer2, &session->player2Stack, sizeof(session->player2Stack), 0);
+    sendCode(socketPlayer1, TURN_BET);
+    sendCode(socketPlayer2, TURN_BET);
+
+    return 0; // partida continua
+}
+
+
 void *handleGame(void *args) {
 	tSession session;
 	unsigned int code;
@@ -217,8 +286,9 @@ void *handleGame(void *args) {
 
 
 	tPlayer jugadorActivo = player1;
-		int *socketActivo = &socketPlayer1;
-		int *socketPasivo = &socketPlayer2;
+	int *socketActivo = &socketPlayer1;
+	int *socketPasivo = &socketPlayer2;
+
 	while (partidaFinalizada == 0) {
 
 		
@@ -288,66 +358,15 @@ void *handleGame(void *args) {
 			}
 
 		}
-		printf("Fin de la ronda. Calculando resultados...\n");
-
-		unsigned int puntosJugador1 = calculatePoints(&session.player1Deck);
-		unsigned int puntosJugador2 = calculatePoints(&session.player2Deck);
-
-		printf("Puntos %s: %u\n", session.player1Name, puntosJugador1);
-		printf("Puntos %s: %u\n", session.player2Name, puntosJugador2);
-
-		if ((puntosJugador1 > GOAL_GAME) && (puntosJugador2 > GOAL_GAME)) {
-			printf( "Ambos jugadores han superado los puntos permitidos. Empate.\n");
-			enviarEstadoJugador(socketPlayer1, &session.player1Deck, TURN_GAME_WIN);
-			enviarEstadoJugador(socketPlayer2, &session.player2Deck, TURN_GAME_WIN);
-		} else if ((puntosJugador1 <= GOAL_GAME) && ((puntosJugador1 > puntosJugador2) || (puntosJugador2 > GOAL_GAME))) {
-
-			enviarEstadoJugador(socketPlayer1, &session.player1Deck, TURN_GAME_WIN);
-			enviarEstadoJugador(socketPlayer2, &session.player2Deck, TURN_GAME_LOSE);
-
-			session.player1Stack += session.player1Bet;
-			session.player2Stack -= session.player2Bet;
-			jugadorActivo = getNextPlayer(jugadorActivo);
-
-		} 
-        else if ((puntosJugador2 <= GOAL_GAME)&& ((puntosJugador2 > puntosJugador1)|| (puntosJugador1 > GOAL_GAME))) {
-			printf("%s gana la partida!\n", session.player2Name);
-
-			enviarEstadoJugador(socketPlayer2, &session.player1Deck, TURN_GAME_WIN);
-			enviarEstadoJugador(socketPlayer1, &session.player2Deck, TURN_GAME_LOSE);
-
-			session.player2Stack += session.player2Bet;
-			session.player1Stack -= session.player1Bet;
-			jugadorActivo = getNextPlayer(jugadorActivo);
-		}else if( puntosJugador1 == puntosJugador2){
-			printf("Empate!\n");
-			enviarEstadoJugador(socketPlayer1, &session.player1Deck, TURN_GAME_WIN);
-			enviarEstadoJugador(socketPlayer2, &session.player2Deck, TURN_GAME_WIN);
-		}
 
         apuestaJugadores = 0;
-        session.player1Bet = 0;
-        session.player2Bet = 0;
-        clearDeck(&session.player1Deck);
-        clearDeck(&session.player2Deck);
-		printf("Stacks finales: %s: %d, %s: %d\n", session.player1Name,session.player1Stack, session.player2Name,session.player2Stack);
-        if (session.player1Stack == 0 || session.player2Stack == 0) {
-            partidaFinalizada = 1;
-             send(socketPlayer1, &session.player1Stack, sizeof(session.player1Stack), 0);
-            send(socketPlayer2, &session.player2Stack, sizeof(session.player2Stack), 0);
-            sendCode(socketPlayer1, TURN_PLAY_OUT);
-            sendCode(socketPlayer2, TURN_PLAY_OUT);
-            printf("Un jugador se ha quedado sin fichas. Fin de la partida.\n");
-        } else {
-            initDeck(&session.gameDeck);
-            send(socketPlayer1, &session.player1Stack, sizeof(session.player1Stack), 0);
-            send(socketPlayer2, &session.player2Stack, sizeof(session.player2Stack), 0);
-            sendCode(socketPlayer1, TURN_BET);
-            sendCode(socketPlayer2, TURN_BET);
-			//
-			jugadorActivo = getNextPlayer(jugadorActivo);
-        }
-        
+
+		jugadorActivo = getNextPlayer(jugadorActivo);
+		int *tmp = socketActivo;
+		socketActivo = socketPasivo;
+		socketPasivo = tmp;
+
+        partidaFinalizada = procesarFinDeRonda(&session, socketPlayer1, socketPlayer2);  	
 	}
 
 	close(socketPlayer1);
@@ -362,7 +381,7 @@ int main(int argc, char *argv[]) {
 	int socketfd;
 	struct sockaddr_in serverAddress, player1Address;
 	unsigned int port, clientLength;
-	int socketPlayer1 = -1, socketPlayer2;
+
 	tThreadArgs *threadArgs;
 	pthread_t threadID;
 
@@ -389,28 +408,27 @@ int main(int argc, char *argv[]) {
 	clientLength = sizeof(player1Address);
 
 	while (1) {
-		int newSocket = accept(socketfd, (struct sockaddr *) &player1Address,&clientLength);
-		if (newSocket < 0)
-			showError("Error en accept");
+		printf("Esperando jugador 1...\n");
+    	int socketPlayer1 = accept(socketfd, (struct sockaddr *)&player1Address, &clientLength);
+    	if (socketPlayer1 < 0)
+       		showError("Error en accept jugador 1");
+    	printf("Jugador 1 conectado (socket %d)\n", socketPlayer1);
 
-		printf("Jugador conectado (socket %d)\n", newSocket);
+    	printf("Esperando jugador 2...\n");
+    	int socketPlayer2 = accept(socketfd, (struct sockaddr *)&player1Address, &clientLength);
+    	if (socketPlayer2 < 0)
+        	showError("Error en accept jugador 2");
+    	printf("Jugador 2 conectado (socket %d)\n", socketPlayer2);
 
-		if (socketPlayer1 == -1) {
-			socketPlayer1 = newSocket;
+		threadArgs = malloc(sizeof(tThreadArgs));
+		threadArgs->socketPlayer1 = socketPlayer1;
+		threadArgs->socketPlayer2 = socketPlayer2;
 
-		} else {
-			socketPlayer2 = newSocket;
+		pthread_create(&threadID, NULL, handleGame, threadArgs);
+		pthread_detach(threadID);
 
-			threadArgs = malloc(sizeof(tThreadArgs));
-			threadArgs->socketPlayer1 = socketPlayer1;
-			threadArgs->socketPlayer2 = socketPlayer2;
-
-			pthread_create(&threadID, NULL, handleGame, threadArgs);
-			pthread_detach(threadID);
-
-			// Reiniciar "jugador en espera"
-			socketPlayer1 = -1;
-		}
+			
+		
 	}
 
 	close(socketfd);

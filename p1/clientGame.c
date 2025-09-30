@@ -116,10 +116,14 @@ unsigned int recibirEstadoJugador(int socket) {
 			perror("Error al recibir las cartas del jugador");
 			return code;
 		}
-		printf("Cartas del jugador: ");
+		printf("Posición de array Cartas del jugador Activo: ");
 		for (unsigned int i = 0; i < numCartas; i++) {
 			printf("%u ", cartas[i]);
 		}
+		
+		printf("\n");
+		printf("\n");
+		printf("↑↑ Estadisticas mesa jugador Activo. ↑↑\n");
 		printf("\n");
 	}
 	return code;
@@ -178,53 +182,64 @@ int main(int argc, char *argv[]) {
 	sendMessage(socketfd, buffer);
 
 	while (endOfGame == 0) {
-		printf("Empieza una nueva ronda!\n");
+		
 		recv(socketfd, &stack, sizeof(stack), 0);
 		recv(socketfd, &code, sizeof(code), 0);
 		if (code == TURN_BET) {
+			printf("\n");
+			printf("------Empieza una nueva ronda!------\n");
 			printf("Tu stack actual es: %u\n", stack);
 			bool validBet = false;
 
 			while (!validBet) {
-				printf("Introduce tu apuesta: ");
+				printf("Introduce tu apuesta:\n ");
 				unsigned int bet = readBet();
 				send(socketfd, &bet, sizeof(bet), 0);
-				printf("Apuesta enviada: %u\n", bet);
 
 				memset(&code, 0, sizeof(code));
 				recv(socketfd, &code, sizeof(code), 0);
 
 				if (code == TURN_BET_OK) {
-					printf("Apuesta realizada.\n");
+					
+					printf("------Apuesta realizada.------\n");
+					printf("\n");
+					printf("\n");
 					validBet = true;
-
 					memset(&code, 0, sizeof(code));
 
 					unsigned int newCode = TURN_PLAY;
-					while ((newCode != TURN_GAME_LOSE)
-							&& (newCode != TURN_GAME_WIN)) {
-						printf("Esperando recivir estado...\n");
-
+					while ((newCode != TURN_GAME_LOSE) && (newCode != TURN_GAME_WIN)) {
+					
 						newCode = recibirEstadoJugador(socketfd);
-
-						if (newCode == TURN_PLAY) {
-
-							printf("Jugador activo.\n");
-
+						switch (newCode) {
+						case TURN_PLAY:						
+							
 							unsigned int option = readOption();
 							sendCode(socketfd, option);
-
-						} else if (newCode == TURN_PLAY_WAIT) {
-							printf("Jugador pasivo.\n");
-						} else if (newCode == TURN_PLAY_OUT) {
+							
+							break;
+						case TURN_PLAY_WAIT:
+							printf("Mesa del otro jugador...\n");
+							break;
+						case TURN_PLAY_OUT:
 							printf("Has superado los puntos permitidos. \n");
-						} else if (newCode == TURN_GAME_LOSE) {
-							printf("Has perdido la mano. \n");
-						} else if (newCode == TURN_GAME_WIN) {
-							printf("Has ganado la mano. \n");
+							break;
+						case TURN_GAME_LOSE:
+							printf("\n");
+							printf(".------Has perdido la mano.------. \n");
+							printf("\n");
+							break;
+						case TURN_GAME_WIN:
+							printf("\n");
+							printf("------Has ganado la mano.------ \n");
+							printf("\n");
+							break;
+						default:
+							printf("Código inesperado: %u\n", newCode);
+							break;
 						}
 					}
-					printf("La ronda ha terminado.\n");
+					printf("------La ronda ha terminado.------\n");
 
 				} else if (code == TURN_BET) {
 					printf("Apuesta incorrecta, intenta de nuevo.\n");
@@ -234,7 +249,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 		} else if (code == TURN_PLAY_OUT) {
-			printf("Partida finalizada. \n");
+			printf("------Partida finalizada.------ \n");
 			endOfGame = 1;
 		}
 
