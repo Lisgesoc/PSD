@@ -157,7 +157,7 @@ int gestionarApuesta(int socketJugador, unsigned int stackJugador,
 		if (rec <= 0)
 			return -1;
 
-		if (bet > 0 && bet <= stackJugador) {
+		if (bet > 0 && bet <= stackJugador && bet <= MAX_BET) {
 			*betPtr = bet;
 			sendCode(socketJugador, TURN_BET_OK);
 			isValid = TRUE;
@@ -290,12 +290,27 @@ void *handleGame(void *args) {
 	int *socketPasivo = &socketPlayer2;
 
 	while (partidaFinalizada == 0) {
-
+        apuestaJugadores = 0;
 		
         printf("Stacks iniciales: %s: %d, %s: %d\n", session.player1Name,session.player1Stack, session.player2Name,session.player2Stack);
 
-		gestionarApuesta(*socketActivo, session.player1Stack, &session.player1Bet);
-		gestionarApuesta(*socketPasivo, session.player2Stack, &session.player2Bet);
+		unsigned int stackActivo, stackPasivo;
+		unsigned int *betActivo, *betPasivo;
+		
+		if (jugadorActivo == player1) {
+			stackActivo = session.player1Stack;
+			stackPasivo = session.player2Stack;
+			betActivo = &session.player1Bet;
+			betPasivo = &session.player2Bet;
+		} else {
+			stackActivo = session.player2Stack;
+			stackPasivo = session.player1Stack;
+			betActivo = &session.player2Bet;
+			betPasivo = &session.player1Bet;
+		}
+
+		gestionarApuesta(*socketActivo, stackActivo, betActivo);
+		gestionarApuesta(*socketPasivo, stackPasivo, betPasivo);
       
 		if (session.player1Bet > session.player2Bet) {
             session.player1Bet = session.player2Bet;
@@ -304,7 +319,21 @@ void *handleGame(void *args) {
 			session.player2Bet = session.player1Bet;
 		}
 
-		enviarEstadoJugador(*socketActivo, &session.player1Deck, TURN_PLAY);
+
+		for (int i = 0; i < 2; i++) {
+        	session.player1Deck.cards[session.player1Deck.numCards] = getRandomCard(&session.gameDeck);
+        	session.player1Deck.numCards++;
+        
+        	session.player2Deck.cards[session.player2Deck.numCards] = getRandomCard(&session.gameDeck);
+        	session.player2Deck.numCards++;
+    	}
+ 		printf("Cartas iniciales repartidas:\n");
+        printSession(&session);
+
+		tDeck *deckActivoInicial = (jugadorActivo == player1) ? &session.player1Deck : &session.player2Deck;
+        // Enviar estado inicial a ambos jugadores
+        enviarEstadoJugador(*socketActivo, deckActivoInicial, TURN_PLAY);
+        enviarEstadoJugador(*socketPasivo, deckActivoInicial, TURN_PLAY_WAIT);
 
 		while (apuestaJugadores < 2) {
 
@@ -359,7 +388,7 @@ void *handleGame(void *args) {
 
 		}
 
-        apuestaJugadores = 0;
+
 
 		jugadorActivo = getNextPlayer(jugadorActivo);
 		int *tmp = socketActivo;
@@ -407,6 +436,7 @@ int main(int argc, char *argv[]) {
 
 	clientLength = sizeof(player1Address);
 
+    srand(time(NULL));
 	while (1) {
 		printf("Esperando jugador 1...\n");
     	int socketPlayer1 = accept(socketfd, (struct sockaddr *)&player1Address, &clientLength);

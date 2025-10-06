@@ -229,6 +229,9 @@ int main(int argc, char *argv[]) {
 							printf(".------Has perdido la mano.------. \n");
 							printf("\n");
 							break;
+						case TURN_PLAY_RIVAL_DONE:
+        					printf("Tu rival ha terminado su turno. Ahora es tu turno.\n");
+        					break;
 						case TURN_GAME_WIN:
 							printf("\n");
 							printf("------Has ganado la mano.------ \n");
