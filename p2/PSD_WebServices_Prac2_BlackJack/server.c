@@ -130,10 +130,34 @@ int blackJackns__register (struct soap *soap, blackJackns__tMessage playerName, 
 		if (DEBUG_SERVER)
 			printf ("[Register] Registering new player -> [%s]\n", playerName.msg);
 
+		int i=0;
+		int found = FALSE;
+		while(i<MAX_GAMES && !found){
+			if(games[i].status == gameEmpty){
+				initGame (&(games[i]));
+				strcpy(games[i].player1Name, playerName.msg);
+				games[i].status = gameWaitingPlayer;
+				games[i].currentPlayer = player1;
+				*result = i;
+				found = TRUE;
+				
+				
+			}else if(games[i].status == gameWaitingPlayer){
+				strcpy(games[i].player2Name, playerName.msg);
+				games[i].status = gameReady;
+				games[i].currentPlayer = player1;
+				*result = i;
+				found = TRUE;
+			}
+			++i;
+			printf("Numero de salaaaa: %d\n", i);
+		}
 	
-	
-	
-
+	if(i==MAX_GAMES && !found){
+		*result = -1;
+		if (DEBUG_SERVER)
+			printf ("[Register] No available games\n");
+	}
   	return SOAP_OK;
 }
 
@@ -177,7 +201,7 @@ int main(int argc, char **argv){
 			exit(0);
 		}
 		soap_init(&soap);
-
+		initServerStructures(&soap);
 		// Configure timeouts
 		soap.send_timeout = 60; // 60 seconds
 		soap.recv_timeout = 60; // 60 seconds

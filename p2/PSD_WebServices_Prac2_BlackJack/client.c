@@ -68,6 +68,10 @@ int main(int argc, char **argv){
 		// Allocate memory
 		allocClearMessage (&soap, &(playerName));
 		allocClearBlock (&soap, &gameStatus);
+
+		printf ("Enter your name:\n ");
+		fgets(playerName.msg, STRING_LENGTH-1, stdin);
+		playerName.msg[strlen(playerName.msg)-1] = 0;
 				
 		// Check arguments
 		if (argc !=2) {
@@ -77,7 +81,7 @@ int main(int argc, char **argv){
 
 	
 
-    soap_call_blackJackns__getStatus(&soap,serverURL,"",playerName,1,&gameStatus);
+    soap_call_blackJackns__register(&soap,serverURL,"",playerName,&gameId);
 	if (soap.error) {
     soap_print_fault(&soap, stderr);
     printf("Error code: %d\n", soap.error);
