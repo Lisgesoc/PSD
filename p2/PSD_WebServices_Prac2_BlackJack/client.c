@@ -69,19 +69,34 @@ int main(int argc, char **argv){
 		allocClearMessage (&soap, &(playerName));
 		allocClearBlock (&soap, &gameStatus);
 
-		printf ("Enter your name:\n ");
-		fgets(playerName.msg, STRING_LENGTH-1, stdin);
-		playerName.msg[strlen(playerName.msg)-1] = 0;
+		
 				
 		// Check arguments
 		if (argc !=2) {
 			printf("Usage: %s http://server:port\n",argv[0]);
 			exit(0);
 		}
+	printf ("Enter your name:\n ");
+	fgets(playerName.msg, STRING_LENGTH-1, stdin);
+	playerName.msg[strlen(playerName.msg)-1] = 0;
 
 	
+	resCode = -1;
+	while(resCode < 0){
+	
+		resCode= soap_call_blackJackns__register(&soap, serverURL, "", playerName, &gameId);
+		printf("El id del juego es: %d\n", gameId);
+		if(resCode == ERROR_SERVER_FULL){
+			printf("[Register] No available games\n");
+		}else if(resCode == ERROR_NAME_REPEATED){
+			printf("[Register] Player name already taken. Please choose another name\n");
+			printf("Enter your name:\n ");
+			fgets(playerName.msg, STRING_LENGTH-1, stdin);
+			playerName.msg[strlen(playerName.msg)-1] = 0;
+		}
+	}
 
-    soap_call_blackJackns__register(&soap,serverURL,"",playerName,&gameId);
+    
 	if (soap.error) {
     soap_print_fault(&soap, stderr);
     printf("Error code: %d\n", soap.error);
