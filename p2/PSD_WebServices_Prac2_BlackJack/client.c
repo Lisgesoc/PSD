@@ -5,33 +5,32 @@ unsigned int readBet (){
 	int isValid, bet=0;
 	xsd__string enteredMove;
 
-		// While player does not enter a correct bet...
-		do{
+	// While player does not enter a correct bet...
+	do{
+		// Init...
+		enteredMove = (xsd__string) malloc (STRING_LENGTH);
+		bzero (enteredMove, STRING_LENGTH);
+		isValid = TRUE;
 
-			// Init...
-			enteredMove = (xsd__string) malloc (STRING_LENGTH);
-			bzero (enteredMove, STRING_LENGTH);
-			isValid = TRUE;
+		printf ("Enter a value:");
+		fgets(enteredMove, STRING_LENGTH-1, stdin);
+		enteredMove[strlen(enteredMove)-1] = 0;
 
-			printf ("Enter a value:");
-			fgets(enteredMove, STRING_LENGTH-1, stdin);
-			enteredMove[strlen(enteredMove)-1] = 0;
+		// Check if each character is a digit
+		for (int i=0; i<strlen(enteredMove) && isValid; i++)
+			if (!isdigit(enteredMove[i]))
+				isValid = FALSE;
 
-			// Check if each character is a digit
-			for (int i=0; i<strlen(enteredMove) && isValid; i++)
-				if (!isdigit(enteredMove[i]))
-					isValid = FALSE;
+		// Entered move is not a number
+		if (!isValid)
+			printf ("Entered value is not correct. It must be a number greater than 0\n");
+		else
+			bet = atoi (enteredMove);
 
-			// Entered move is not a number
-			if (!isValid)
-				printf ("Entered value is not correct. It must be a number greater than 0\n");
-			else
-				bet = atoi (enteredMove);
+	}while (!isValid);
 
-		}while (!isValid);
-
-		printf ("\n");
-		free (enteredMove);
+	printf ("\n");
+	free (enteredMove);
 
 	return ((unsigned int) bet);
 }
@@ -40,12 +39,15 @@ unsigned int readOption (){
 
 	unsigned int bet;
 
-		do{
-			printf ("What is your move? Press %d to hit a card and %d to stand\n", PLAYER_HIT_CARD, PLAYER_STAND);
-			bet = readBet();
-			if ((bet != PLAYER_HIT_CARD) && (bet != PLAYER_STAND))
-				printf ("Wrong option!\n");			
-		} while ((bet != PLAYER_HIT_CARD) && (bet != PLAYER_STAND));
+	do{
+		//? Se envia un mensaje de solicitud de jugada,
+		//? pero se envia directamente a la entrada de la apuesta
+		//? Se usa la funcion leerApuesta para leer un entero?
+		printf ("What is your move? Press %d to hit a card and %d to stand\n", PLAYER_HIT_CARD, PLAYER_STAND);
+		bet = readBet();
+		if ((bet != PLAYER_HIT_CARD) && (bet != PLAYER_STAND))
+			printf ("Wrong option!\n");			
+	} while ((bet != PLAYER_HIT_CARD) && (bet != PLAYER_STAND));
 
 	return bet;
 }
@@ -95,6 +97,9 @@ int main(int argc, char **argv){
 			playerName.msg[strlen(playerName.msg)-1] = 0;
 		}
 	}
+
+//TODO: Loop del juego
+
 	//while(!endGame){
 		printf("gameId: %d\n", gameId);
 		soap_call_blackJackns__getStatus(&soap, serverURL, "", playerName, gameId, &gameStatus);
@@ -112,9 +117,9 @@ int main(int argc, char **argv){
 			Imprimir estado del juego 
     */
 	if (soap.error) {
-    soap_print_fault(&soap, stderr);
-    printf("Error code: %d\n", soap.error);
-}
+		soap_print_fault(&soap, stderr);
+		printf("Error code: %d\n", soap.error);
+	}
   	
   	
 	// Clean the environment
@@ -122,17 +127,5 @@ int main(int argc, char **argv){
   	soap_end(&soap);
   	soap_done(&soap);
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-
   	return 0;
 }

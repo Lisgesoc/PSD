@@ -183,7 +183,7 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 			found = TRUE;
 		}
 		++i;
-		printf("Numero de sal0000aaa: %d\n", i);
+		printf("Numero de sala: %d\n", i);
 	}
 
 	if (i == MAX_GAMES && !found)
@@ -222,6 +222,7 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 
 int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName, int gameId, int action, blackJackns__tBlock **status)
 {
+	//TODO
 	return SOAP_OK;
 };
 void *processRequest(void *soap)
