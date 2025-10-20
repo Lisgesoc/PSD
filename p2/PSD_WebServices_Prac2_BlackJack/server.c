@@ -203,6 +203,14 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 */
 int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, int gameId, blackJackns__tBlock **status)
 { 	
+
+	*status = (blackJackns__tBlock *)soap_malloc(soap, sizeof(blackJackns__tBlock));
+    memset(*status, 0, sizeof(blackJackns__tBlock));
+
+    
+    (*status)->msgStruct.msg = (xsd__string)soap_malloc(soap, STRING_LENGTH);
+    (*status)->deck.cards = (unsigned int *)soap_malloc(soap, DECK_SIZE * sizeof(unsigned int));
+
 	tGame *game = &games[gameId];
 	tPlayer thisPlayer;
     if (strcmp(playerName.msg, game->player1Name) == 0)
@@ -210,18 +218,29 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
     else
         thisPlayer = player2;
 
-    // Si NO es su turno, se bloquea
+	pthread_mutex_lock(&games[gameId].mutex);
     while (game->currentPlayer != thisPlayer)
     {
         printf("[getStatus] %s espera su turno...\n", playerName.msg);
         pthread_cond_wait(&game->turnCond, &game->mutex);
     }
+
+
+	//Si le toca jugar
+	printf("aaaaaaaaaaa \n");
+	copyGameStatusStructure(*status, "Tu turno. Elige una acción: pedir carta o plantarte.", 
+        (thisPlayer == player1 ? &game->player1Deck : &game->player2Deck), TURN_PLAY);
+	printf("[DEBUG] Código asignado: %d\n", (*status)->code);  
 	pthread_mutex_unlock(&games[gameId].mutex);
+
+
+
 	return SOAP_OK;
 };
 
 int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName, int gameId, int action, blackJackns__tBlock **status)
 {
+	printf("playerMove\n");
 	return SOAP_OK;
 };
 void *processRequest(void *soap)

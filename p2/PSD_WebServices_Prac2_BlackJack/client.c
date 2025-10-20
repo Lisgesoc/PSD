@@ -55,7 +55,9 @@ int main(int argc, char **argv){
 	struct soap soap;					/** Soap struct */
 	char *serverURL;					/** Server URL */
 	blackJackns__tMessage playerName;	/** Player name */
-	blackJackns__tBlock gameStatus;		/** Game status */
+	
+	blackJackns__tBlock gameStatus; 
+    
 	unsigned int playerMove;			/** Player's move */
 	int resCode, gameId;				/** Result and gameId */
 	int endGame = 0;			
@@ -69,7 +71,7 @@ int main(int argc, char **argv){
 		allocClearMessage (&soap, &(playerName));
 		allocClearBlock (&soap, &gameStatus);
 
-		
+		gameStatus.code = 0;
 				
 		// Check arguments
 		if (argc !=2) {
@@ -95,12 +97,20 @@ int main(int argc, char **argv){
 			playerName.msg[strlen(playerName.msg)-1] = 0;
 		}
 	}
-	//while(!endGame){
-		printf("gameId: %d\n", gameId);
-		soap_call_blackJackns__getStatus(&soap, serverURL, "", playerName, gameId, &gameStatus);
-		printFancyDeck(&gameStatus.deck);
 
-	//}
+	
+		
+		printFancyDeck(&gameStatus.deck);
+			while(!endGame){
+				soap_call_blackJackns__getStatus(&soap, serverURL, "", playerName, gameId, &gameStatus );
+				printf("gameStatus->code: %d\n", gameStatus.code);
+				printFancyDeck(&gameStatus.deck);
+				if(gameStatus.code == TURN_PLAY){
+					playerMove = readOption();
+					soap_call_blackJackns__playerMove(&soap, serverURL, "", playerName, gameId, playerMove, &gameStatus );
+					printFancyDeck(&gameStatus.deck);
+			}
+	}
 /*	
 	Mientras (no acabe el juego) 
 		getStatus (nombreJugador, idPartida, …); 
