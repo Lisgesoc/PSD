@@ -26,6 +26,7 @@ void initGame(tGame *game)
 	game->endOfGame = FALSE;
 	game->status = gameEmpty;
 
+
 	// Mutex and condition 
 
 	pthread_mutex_init(&game->mutex, NULL);
@@ -154,7 +155,8 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 			initGame(&(games[i]));
 			strcpy(games[i].player1Name, playerName.msg);
 			games[i].status = gameWaitingPlayer;
-			games[i].currentPlayer = player1;
+		
+			
 			*result = i;
 			found = TRUE;
 			code = SOAP_OK;
@@ -173,6 +175,7 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 			{
 				strcpy(games[i].player2Name, playerName.msg);
 				games[i].status = gameReady;
+				games[i].currentPlayer = player1;
 				*result = i;
 				code = SOAP_OK;
 			
@@ -200,16 +203,20 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 */
 int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, int gameId, blackJackns__tBlock **status)
 { 	
-	tPlayer activePlayer = games[gameId].currentPlayer;
-	tPlayer pasivePlayer = calculateNextPlayer(activePlayer);
-	pthread_mutex_lock(&games[gameId].mutex);
-	while(games[gameId].currentPlayer == pasivePlayer){ //Esto esta mal corregirrrr
-		printf("aaaaaaaaaaaaaaaaaaaaaaaa\n");
-		pthread_cond_wait(&games[gameId].turnCond, &games[gameId].mutex);
+	tGame *game = &games[gameId];
+	tPlayer thisPlayer;
+    if (strcmp(playerName.msg, game->player1Name) == 0)
+        thisPlayer = player1;
+    else
+        thisPlayer = player2;
 
-	}
+    // Si NO es su turno, se bloquea
+    while (game->currentPlayer != thisPlayer)
+    {
+        printf("[getStatus] %s espera su turno...\n", playerName.msg);
+        pthread_cond_wait(&game->turnCond, &game->mutex);
+    }
 	pthread_mutex_unlock(&games[gameId].mutex);
-	printf("holaaaaaaaa\n");
 	return SOAP_OK;
 };
 
@@ -222,7 +229,7 @@ void *processRequest(void *soap)
 
 	pthread_detach(pthread_self());
 
-	printf("Processing a new request...");
+	printf("Processing a new request... \n");
 
 	soap_serve((struct soap *)soap);
 	soap_destroy((struct soap *)soap);
