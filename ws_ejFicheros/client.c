@@ -74,7 +74,6 @@ void receiveFile (char *host, char* src, char* dst){
 	write(fd, data_total.__ptr, data_total.__size);
 	close(fd);
     printf(" Archivo recibido exitosamente: %s (%d bytes)\n", src, data_total.__size);
-	soap_destroy(&soap);
 	soap_end(&soap);
 	soap_done(&soap);
 
@@ -139,7 +138,6 @@ void sendFile (char *host, char* src, char* dst){
     printf(" Archivo enviado exitosamente: %s (%d bytes)\n", fileName.__ptr, data.__size);
 	free(fileName.__ptr);
 	free(data.__ptr);
-	soap_destroy(&soap);
 	soap_end(&soap);
 	soap_done(&soap);
 }
