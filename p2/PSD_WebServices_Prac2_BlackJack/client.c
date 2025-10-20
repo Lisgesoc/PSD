@@ -58,7 +58,7 @@ int main(int argc, char **argv){
 	blackJackns__tBlock gameStatus;		/** Game status */
 	unsigned int playerMove;			/** Player's move */
 	int resCode, gameId;				/** Result and gameId */
-	
+	int endGame = 0;			
 		// Init gSOAP environment
 		soap_init(&soap);
 
@@ -95,8 +95,22 @@ int main(int argc, char **argv){
 			playerName.msg[strlen(playerName.msg)-1] = 0;
 		}
 	}
+	//while(!endGame){
+		printf("gameId: %d\n", gameId);
+		soap_call_blackJackns__getStatus(&soap, serverURL, "", playerName, gameId, &gameStatus);
+		printFancyDeck(&gameStatus.deck);
 
-    
+	//}
+/*	
+	Mientras (no acabe el juego) 
+		getStatus (nombreJugador, idPartida, …); 
+		int blackJackns__getStatus(blackJackns__tMessage playerName, int gameId, blackJackns__tBlock **status);
+		Imprimir estado del juego 
+		Mientras (jugador tiene el turno) 
+			jugada = Leer opción del jugador 
+			playerMove (nombreJugador,idPartida, jugada, …) 
+			Imprimir estado del juego 
+    */
 	if (soap.error) {
     soap_print_fault(&soap, stderr);
     printf("Error code: %d\n", soap.error);

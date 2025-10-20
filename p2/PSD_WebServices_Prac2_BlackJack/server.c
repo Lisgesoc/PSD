@@ -25,6 +25,11 @@ void initGame(tGame *game)
 	// Game status variables
 	game->endOfGame = FALSE;
 	game->status = gameEmpty;
+
+	// Mutex and condition 
+
+	pthread_mutex_init(&game->mutex, NULL);
+    pthread_cond_init(&game->turnCond, NULL);
 }
 
 void initServerStructures(struct soap *soap)
@@ -168,7 +173,6 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 			{
 				strcpy(games[i].player2Name, playerName.msg);
 				games[i].status = gameReady;
-				games[i].currentPlayer = player1;
 				*result = i;
 				code = SOAP_OK;
 			
@@ -188,9 +192,23 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 	}
 	return code;
 }
-
+/*
+	getStatus debe devolver al jugador el estado actual de su partida.
+	Si no le toca → lo deja bloqueado esperando su turno.
+	Si le toca → le informa que puede jugar.
+	Si el juego terminó → devuelve GAME_WIN o GAME_LOSE.	
+*/
 int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, int gameId, blackJackns__tBlock **status)
-{
+{ 	
+	tPlayer activePlayer = games[gameId].currentPlayer;
+	tPlayer pasivePlayer = calculateNextPlayer(activePlayer);
+	pthread_mutex_lock(&games[gameId].mutex);
+	while(games[gameId].currentPlayer == pasivePlayer){ //Esto esta mal corregirrrr
+		printf("aaaaaaaaaaaaaaaaaaaaaaaa\n");
+		pthread_cond_wait(&games[gameId].turnCond, &games[gameId].mutex);
+
+	}
+	pthread_mutex_unlock(&games[gameId].mutex);
 	printf("holaaaaaaaa\n");
 	return SOAP_OK;
 };
