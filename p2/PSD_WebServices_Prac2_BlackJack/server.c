@@ -29,7 +29,7 @@ void initGame(tGame *game)
 
 	// Mutex and condition 
 
-	pthread_mutex_init(&game->mutex, NULL);
+	pthread_mutex_init(&game->mutex_status, NULL);
     pthread_cond_init(&game->turnCond, NULL);
 }
 
@@ -150,6 +150,7 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 	int found = FALSE;
 	while (i < MAX_GAMES && !found)
 	{
+		//pthread_mutex_lock(&games[i].mutex_register);
 		if (games[i].status == gameEmpty)
 		{
 			initGame(&(games[i]));
@@ -182,6 +183,8 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 			}
 			found = TRUE;
 		}
+		//pthread_mutex_unlock(&games[i].mutex_register);
+
 		++i;
 		printf("Numero de sala: %d\n", i);
 	}
@@ -204,11 +207,7 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, int gameId, blackJackns__tBlock *status)
 { 	
 
-    memset(status, 0, sizeof(blackJackns__tBlock));
-
-    
-    status->msgStruct.msg = (xsd__string)soap_malloc(soap, STRING_LENGTH);
-    status->deck.cards = (unsigned int *)soap_malloc(soap, DECK_SIZE * sizeof(unsigned int));
+    allocClearBlock (soap, status);
 
 	tGame *game = &games[gameId];
 	tPlayer thisPlayer;
@@ -217,30 +216,59 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
     else
         thisPlayer = player2;
 
-	pthread_mutex_lock(&games[gameId].mutex);
+	pthread_mutex_lock(&games[gameId].mutex_status);
     while (game->currentPlayer != thisPlayer)
     {
         printf("[getStatus] %s espera su turno...\n", playerName.msg);
-        pthread_cond_wait(&game->turnCond, &game->mutex);
+        pthread_cond_wait(&game->turnCond, &game->mutex_status);
     }
 
 
 	//Si le toca jugar
-	printf("aaaaaaaaaaa \n");
 	copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", 
         (thisPlayer == player1 ? &game->player1Deck : &game->player2Deck), TURN_PLAY);
 	printf("[DEBUG] Código asignado: %d\n", status->code);  
-	pthread_mutex_unlock(&games[gameId].mutex);
+	pthread_mutex_unlock(&games[gameId].mutex_status);
 
 
 
 	return SOAP_OK;
 };
 
-int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName, int gameId, int action, blackJackns__tBlock **status)
+int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName, int gameId, int action, blackJackns__tBlock *status)
 {
 	//TODO
+	allocClearBlock (soap, status);
+	tGame *game = &games[gameId];
+
+
+	tPlayer player;
+	if(strcmp(playerName.msg, game->player1Name)==0){
+		player=player1;
+	}else{
+		player=player2;
+	}
+
+
 	printf("playerMove\n");
+	if(action == PLAYER_HIT_CARD){
+		if(player==player1){
+			game->player1Deck.cards[game->player1Deck.__size]= getRandomCard(&(games[gameId].gameDeck));
+			game->player1Deck.__size++;
+			status->deck=game->player1Deck;
+		}else{
+			game->player2Deck.cards[game->player1Deck.__size]= getRandomCard(&(games[gameId].gameDeck));
+			game->player2Deck.__size++;
+			status->deck=game->player2Deck;
+
+		}
+		printf("tamano: %d\n", status->deck.__size);
+	}else if (action == PLAYER_STAND){
+		//TODO
+	}else{
+		printf("Invald option\n");
+	}
+
 	return SOAP_OK;
 };
 void *processRequest(void *soap)

@@ -1,138 +1,146 @@
 #include "client.h"
 
-unsigned int readBet (){
+unsigned int readBet()
+{
 
-	int isValid, bet=0;
+	int isValid, bet = 0;
 	xsd__string enteredMove;
 
 	// While player does not enter a correct bet...
-	do{
+	do
+	{
 		// Init...
-		enteredMove = (xsd__string) malloc (STRING_LENGTH);
-		bzero (enteredMove, STRING_LENGTH);
+		enteredMove = (xsd__string)malloc(STRING_LENGTH);
+		bzero(enteredMove, STRING_LENGTH);
 		isValid = TRUE;
 
-		printf ("Enter a value:");
-		fgets(enteredMove, STRING_LENGTH-1, stdin);
-		enteredMove[strlen(enteredMove)-1] = 0;
+		printf("Enter a value:");
+		fgets(enteredMove, STRING_LENGTH - 1, stdin);
+		enteredMove[strlen(enteredMove) - 1] = 0;
 
 		// Check if each character is a digit
-		for (int i=0; i<strlen(enteredMove) && isValid; i++)
+		for (int i = 0; i < strlen(enteredMove) && isValid; i++)
 			if (!isdigit(enteredMove[i]))
 				isValid = FALSE;
 
 		// Entered move is not a number
 		if (!isValid)
-			printf ("Entered value is not correct. It must be a number greater than 0\n");
+			printf("Entered value is not correct. It must be a number greater than 0\n");
 		else
-			bet = atoi (enteredMove);
+			bet = atoi(enteredMove);
 
-	}while (!isValid);
+	} while (!isValid);
 
-	printf ("\n");
-	free (enteredMove);
+	printf("\n");
+	free(enteredMove);
 
-	return ((unsigned int) bet);
+	return ((unsigned int)bet);
 }
 
-unsigned int readOption (){
+unsigned int readOption()
+{
 
 	unsigned int bet;
 
-	do{
-		//? Se envia un mensaje de solicitud de jugada,
-		//? pero se envia directamente a la entrada de la apuesta
-		//? Se usa la funcion leerApuesta para leer un entero?
-		printf ("What is your move? Press %d to hit a card and %d to stand\n", PLAYER_HIT_CARD, PLAYER_STAND);
+	do
+	{
+
+		printf("What is your move? Press %d to hit a card and %d to stand\n", PLAYER_HIT_CARD, PLAYER_STAND);
 		bet = readBet();
 		if ((bet != PLAYER_HIT_CARD) && (bet != PLAYER_STAND))
-			printf ("Wrong option!\n");			
+			printf("Wrong option!\n");
 	} while ((bet != PLAYER_HIT_CARD) && (bet != PLAYER_STAND));
 
 	return bet;
 }
 
-int main(int argc, char **argv){
+int main(int argc, char **argv)
+{
 
-	struct soap soap;					/** Soap struct */
-	char *serverURL;					/** Server URL */
-	blackJackns__tMessage playerName;	/** Player name */
-	
-	blackJackns__tBlock gameStatus; 
-    
-	unsigned int playerMove;			/** Player's move */
-	int resCode, gameId;				/** Result and gameId */
-	int endGame = 0;			
-		// Init gSOAP environment
-		soap_init(&soap);
+	struct soap soap;				  /** Soap struct */
+	char *serverURL;				  /** Server URL */
+	blackJackns__tMessage playerName; /** Player name */
 
-		// Obtain server address
-		serverURL = argv[1];
+	blackJackns__tBlock gameStatus;
 
-		// Allocate memory
-		allocClearMessage (&soap, &(playerName));
-		allocClearBlock (&soap, &gameStatus);
+	unsigned int playerMove; /** Player's move */
+	int resCode, gameId;	 /** Result and gameId */
+	int endGame = 0;
+	// Init gSOAP environment
+	soap_init(&soap);
 
-		gameStatus.code = 0;
-				
-		// Check arguments
-		if (argc !=2) {
-			printf("Usage: %s http://server:port\n",argv[0]);
-			exit(0);
-		}
-	printf ("Enter your name:\n ");
-	fgets(playerName.msg, STRING_LENGTH-1, stdin);
-	playerName.msg[strlen(playerName.msg)-1] = 0;
+	// Obtain server address
+	serverURL = argv[1];
 
-	
+	// Allocate memory
+	allocClearMessage(&soap, &(playerName));
+	allocClearBlock(&soap, &gameStatus);
+
+	gameStatus.code = 0;
+
+	// Check arguments
+	if (argc != 2)
+	{
+		printf("Usage: %s http://server:port\n", argv[0]);
+		exit(0);
+	}
+	printf("Enter your name:\n ");
+	fgets(playerName.msg, STRING_LENGTH - 1, stdin);
+	playerName.msg[strlen(playerName.msg) - 1] = 0;
+
 	resCode = -1;
-	while(resCode < 0){
-	
-		resCode= soap_call_blackJackns__register(&soap, serverURL, "", playerName, &gameId);
+	while (resCode < 0)
+	{
+
+		resCode = soap_call_blackJackns__register(&soap, serverURL, "", playerName, &gameId);
 		printf("El id del juego es: %d\n", gameId);
-		if(resCode == ERROR_SERVER_FULL){
+		if (resCode == ERROR_SERVER_FULL)
+		{
 			printf("[Register] No available games\n");
-		}else if(resCode == ERROR_NAME_REPEATED){
+		}
+		else if (resCode == ERROR_NAME_REPEATED)
+		{
 			printf("[Register] Player name already taken. Please choose another name\n");
 			printf("Enter your name:\n ");
-			fgets(playerName.msg, STRING_LENGTH-1, stdin);
-			playerName.msg[strlen(playerName.msg)-1] = 0;
+			fgets(playerName.msg, STRING_LENGTH - 1, stdin);
+			playerName.msg[strlen(playerName.msg) - 1] = 0;
 		}
 	}
 
-	
-		
+	printFancyDeck(&gameStatus.deck);
+	while (!endGame)
+	{
+		soap_call_blackJackns__getStatus(&soap, serverURL, "", playerName, gameId, &gameStatus);
+		printf("gameStatus->code: %d\n", gameStatus.code);
 		printFancyDeck(&gameStatus.deck);
-			while(!endGame){
-				soap_call_blackJackns__getStatus(&soap, serverURL, "", playerName, gameId, &gameStatus );
-				printf("gameStatus->code: %d\n", gameStatus.code);
-				printFancyDeck(&gameStatus.deck);
-				if(gameStatus.code == TURN_PLAY){
-					playerMove = readOption();
-					soap_call_blackJackns__playerMove(&soap, serverURL, "", playerName, gameId, playerMove, &gameStatus );
-					printFancyDeck(&gameStatus.deck);
-			}
+		while (gameStatus.code == TURN_PLAY)
+		{
+
+			playerMove = readOption();
+			soap_call_blackJackns__playerMove(&soap, serverURL, "", playerName, gameId, playerMove, &gameStatus);
+			printFancyDeck(&gameStatus.deck);
+		}
 	}
-/*	
-	Mientras (no acabe el juego) 
-		getStatus (nombreJugador, idPartida, …); 
-		int blackJackns__getStatus(blackJackns__tMessage playerName, int gameId, blackJackns__tBlock **status);
-		Imprimir estado del juego 
-		Mientras (jugador tiene el turno) 
-			jugada = Leer opción del jugador 
-			playerMove (nombreJugador,idPartida, jugada, …) 
-			Imprimir estado del juego 
-    */
-	if (soap.error) {
+	/*
+		Mientras (no acabe el juego)
+			getStatus (nombreJugador, idPartida, …);
+			int blackJackns__getStatus(blackJackns__tMessage playerName, int gameId, blackJackns__tBlock **status);
+			Imprimir estado del juego
+			Mientras (jugador tiene el turno)
+				jugada = Leer opción del jugador
+				playerMove (nombreJugador,idPartida, jugada, …)
+				Imprimir estado del juego
+		*/
+	if (soap.error)
+	{
 		soap_print_fault(&soap, stderr);
 		printf("Error code: %d\n", soap.error);
 	}
-  	
-  	
+
 	// Clean the environment
 	soap_destroy(&soap);
-  	soap_end(&soap);
-  	soap_done(&soap);
-	
-  	return 0;
+	soap_end(&soap);
+	soap_done(&soap);
+
+	return 0;
 }
