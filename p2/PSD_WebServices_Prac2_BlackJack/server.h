@@ -60,6 +60,7 @@ typedef struct game{
 	
 
 	pthread_mutex_t mutex_register;
+ 	pthread_cond_t  startGameCond;
 
 	pthread_mutex_t mutex_status;                 
     pthread_cond_t  turnCond;

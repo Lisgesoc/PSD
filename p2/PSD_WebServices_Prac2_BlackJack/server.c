@@ -31,6 +31,8 @@ void initGame(tGame *game)
 
 	pthread_mutex_init(&game->mutex_status, NULL);
     pthread_cond_init(&game->turnCond, NULL);
+	pthread_mutex_init(&game->mutex_register, NULL);
+	pthread_cond_init(&game->startGameCond, NULL);
 }
 
 void initServerStructures(struct soap *soap)
@@ -150,7 +152,7 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 	int found = FALSE;
 	while (i < MAX_GAMES && !found)
 	{
-		//pthread_mutex_lock(&games[i].mutex_register);
+		pthread_mutex_lock(&games[i].mutex_register);
 		if (games[i].status == gameEmpty)
 		{
 			initGame(&(games[i]));
@@ -161,6 +163,7 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 			*result = i;
 			found = TRUE;
 			code = SOAP_OK;
+			pthread_cond_wait(&games[i].startGameCond, &games[i].mutex_register);
 		}
 		else if (games[i].status == gameWaitingPlayer)
 		{	
@@ -179,11 +182,12 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 				games[i].currentPlayer = player1;
 				*result = i;
 				code = SOAP_OK;
+				pthread_cond_signal(&games[i].startGameCond);
 			
 			}
 			found = TRUE;
 		}
-		//pthread_mutex_unlock(&games[i].mutex_register);
+		pthread_mutex_unlock(&games[i].mutex_register);
 
 		++i;
 		printf("Numero de sala: %d\n", i);
@@ -210,14 +214,12 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
     allocClearBlock (soap, status);
 
 	tGame *game = &games[gameId];
-	tPlayer thisPlayer;
-    if (strcmp(playerName.msg, game->player1Name) == 0)
-        thisPlayer = player1;
-    else
-        thisPlayer = player2;
+
+   	tPlayer player = game->currentPlayer;
+	blackJackns__tDeck *playerDeck = (player == player1) ? &game->player1Deck : &game->player2Deck;
 
 	pthread_mutex_lock(&games[gameId].mutex_status);
-    while (game->currentPlayer != thisPlayer)
+    while (game->currentPlayer != player)
     {
         printf("[getStatus] %s espera su turno...\n", playerName.msg);
         pthread_cond_wait(&game->turnCond, &game->mutex_status);
@@ -225,8 +227,8 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 
 
 	//Si le toca jugar
-	copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", 
-        (thisPlayer == player1 ? &game->player1Deck : &game->player2Deck), TURN_PLAY);
+	copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", playerDeck, TURN_PLAY);
+	
 	printf("[DEBUG] Código asignado: %d\n", status->code);  
 	pthread_mutex_unlock(&games[gameId].mutex_status);
 
@@ -237,37 +239,25 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 
 int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName, int gameId, int action, blackJackns__tBlock *status)
 {
-	//TODO
+	
 	allocClearBlock (soap, status);
 	tGame *game = &games[gameId];
 
+	tPlayer player = game->currentPlayer;
 
-	tPlayer player;
-	if(strcmp(playerName.msg, game->player1Name)==0){
-		player=player1;
-	}else{
-		player=player2;
-	}
-
+	blackJackns__tDeck *playerDeck = (player == player1) ? &game->player1Deck : &game->player2Deck;
 
 	printf("playerMove\n");
-	if(action == PLAYER_HIT_CARD){
-		if(player==player1){
-			game->player1Deck.cards[game->player1Deck.__size]= getRandomCard(&(games[gameId].gameDeck));
-			game->player1Deck.__size++;
-			status->deck=game->player1Deck;
-		}else{
-			game->player2Deck.cards[game->player1Deck.__size]= getRandomCard(&(games[gameId].gameDeck));
-			game->player2Deck.__size++;
-			status->deck=game->player2Deck;
-
-		}
-		printf("tamano: %d\n", status->deck.__size);
-	}else if (action == PLAYER_STAND){
-		//TODO
-	}else{
-		printf("Invald option\n");
-	}
+	if (action == PLAYER_HIT_CARD) {
+        playerDeck->cards[playerDeck->__size] = getRandomCard(&(game->gameDeck));
+        playerDeck->__size++;
+        status->deck = *playerDeck;
+        copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", playerDeck, TURN_PLAY);
+    } else if (action == PLAYER_STAND) {
+        //TODO: Implementar lógica de STAND
+    } else {
+        printf("Invalid option\n");
+    }
 
 	return SOAP_OK;
 };
