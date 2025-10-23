@@ -107,7 +107,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-
 	while (!endGame)
 	{
 		soap_call_blackJackns__getStatus(&soap, serverURL, "", playerName, gameId, &gameStatus);
@@ -121,12 +120,26 @@ int main(int argc, char **argv)
 			soap_call_blackJackns__playerMove(&soap, serverURL, "", playerName, gameId, playerMove, &gameStatus);
 			printFancyDeck(&gameStatus.deck);
 		}
-		if (gameStatus.code == GAME_WIN)
+
+		switch (gameStatus.code)
 		{
-			printf("You win!\n");
-			endGame = 1;
+		case TURN_WAIT:
+			printf("\n");
+			printf("Waiting for your turn...\n");
+			break;
+		case GAME_LOSE:
+			printf("\n");
+			printf("You lose the hand!\n");
+			//endGame = 1;
+			break;
+		case GAME_WIN:
+			printf("\n");
+			printf("You win the hand\n");
+			//endGame = 1;
+			break;
+		default:
+			break;
 		}
-	
 	}
 	/*
 		Mientras (no acabe el juego)

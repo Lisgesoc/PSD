@@ -1,5 +1,5 @@
 #include "server.h"
-//#include "blackJack.h"
+// #include "blackJack.h"
 
 /** Shared array that contains all the games. */
 tGame games[MAX_GAMES];
@@ -26,11 +26,10 @@ void initGame(tGame *game)
 	game->endOfGame = FALSE;
 	game->status = gameEmpty;
 
-
-	// Mutex and condition 
+	// Mutex and condition
 
 	pthread_mutex_init(&game->mutex_status, NULL);
-    pthread_cond_init(&game->turnCond, NULL);
+	pthread_cond_init(&game->turnCond, NULL);
 	pthread_mutex_init(&game->mutex_register, NULL);
 	pthread_cond_init(&game->startGameCond, NULL);
 }
@@ -140,7 +139,7 @@ void copyGameStatusStructure(blackJackns__tBlock *status, char *message, blackJa
 int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, int *result)
 {
 
-	int gameIndex,code;
+	int gameIndex, code;
 
 	// Set \0 at the end of the string
 	playerName.msg[playerName.__size] = 0;
@@ -158,22 +157,20 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 			initGame(&(games[i]));
 			strcpy(games[i].player1Name, playerName.msg);
 			games[i].status = gameWaitingPlayer;
-		
-			
+
 			*result = i;
 			found = TRUE;
 			code = SOAP_OK;
 			pthread_cond_wait(&games[i].startGameCond, &games[i].mutex_register);
 		}
 		else if (games[i].status == gameWaitingPlayer)
-		{	
+		{
 			printf("Debug - Game[%d] status: %d\n", i, games[i].status);
 			printf("Comparing names: '%s' with '%s'\n", games[i].player1Name, playerName.msg);
 			if (strcmp(games[i].player1Name, playerName.msg) == 0)
 			{
 				printf("[Register] Player name already taken in game %d\n", i);
-				 code = ERROR_NAME_REPEATED;
-				
+				code = ERROR_NAME_REPEATED;
 			}
 			else
 			{
@@ -183,7 +180,6 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 				*result = i;
 				code = SOAP_OK;
 				pthread_cond_signal(&games[i].startGameCond);
-			
 			}
 			found = TRUE;
 		}
@@ -206,41 +202,44 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 	getStatus debe devolver al jugador el estado actual de su partida.
 	Si no le toca → lo deja bloqueado esperando su turno.
 	Si le toca → le informa que puede jugar.
-	Si el juego terminó → devuelve GAME_WIN o GAME_LOSE.	
+	Si el juego terminó → devuelve GAME_WIN o GAME_LOSE.
 */
 int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, int gameId, blackJackns__tBlock *status)
-{ 	
+{
 
-    allocClearBlock (soap, status);
+	allocClearBlock(soap, status);
 
 	tGame *game = &games[gameId];
 
-   	tPlayer player = game->currentPlayer;
+	tPlayer player;
+
+	if (strcmp(playerName.msg, game->player1Name) == 0)
+		player = player1;
+	else
+		player = player2;
+
 	blackJackns__tDeck *playerDeck = (player == player1) ? &game->player1Deck : &game->player2Deck;
 
 	pthread_mutex_lock(&games[gameId].mutex_status);
-    while (game->currentPlayer != player)
-    {
-        printf("[getStatus] %s espera su turno...\n", playerName.msg);
-        pthread_cond_wait(&game->turnCond, &game->mutex_status);
-    }
+	while (game->currentPlayer != player)
+	{
+		printf("[getStatus] %s espera su turno...\n", playerName.msg);
+		pthread_cond_wait(&game->turnCond, &game->mutex_status);
+	}
 
-
-	//Si le toca jugar
+	// Si le toca jugar
 	copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", playerDeck, TURN_PLAY);
-	
-	printf("[DEBUG] Código asignado: %d\n", status->code);  
+
+	printf("[DEBUG] Código asignado: %d\n", status->code);
 	pthread_mutex_unlock(&games[gameId].mutex_status);
-
-
 
 	return SOAP_OK;
 };
 
 int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName, int gameId, int action, blackJackns__tBlock *status)
 {
-	
-	allocClearBlock (soap, status);
+
+	allocClearBlock(soap, status);
 	tGame *game = &games[gameId];
 
 	tPlayer player = game->currentPlayer;
@@ -248,16 +247,36 @@ int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName,
 	blackJackns__tDeck *playerDeck = (player == player1) ? &game->player1Deck : &game->player2Deck;
 
 	printf("playerMove\n");
-	if (action == PLAYER_HIT_CARD) {
-        playerDeck->cards[playerDeck->__size] = getRandomCard(&(game->gameDeck));
-        playerDeck->__size++;
-        status->deck = *playerDeck;
-        copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", playerDeck, TURN_PLAY);
-    } else if (action == PLAYER_STAND) {
-        //TODO: Implementar lógica de STAND
-    } else {
-        printf("Invalid option\n");
-    }
+	if (action == PLAYER_HIT_CARD)
+	{
+		playerDeck->cards[playerDeck->__size] = getRandomCard(&(game->gameDeck));
+		playerDeck->__size++;
+		status->deck = *playerDeck;
+		int points = calculatePoints(playerDeck);
+		if (points <= 21)
+		{
+			printf("Player %d has %d points.\n", player + 1, points);
+			copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", playerDeck, TURN_PLAY);
+		}
+		else
+		{
+			printf("Player %d has busted!\n", player + 1);
+			game->currentPlayer = calculateNextPlayer(player);
+			copyGameStatusStructure(status, "Has superado los 21 puntos. Has perdido la partida.", playerDeck, GAME_LOSE);
+			pthread_cond_signal(&game->turnCond);
+		}
+	}
+	else if (action == PLAYER_STAND)
+	{
+		game->currentPlayer = calculateNextPlayer(player);
+		copyGameStatusStructure(status, "Has decidido plantarte. Espera tu próximo turno.", playerDeck, TURN_WAIT);
+		pthread_cond_signal(&game->turnCond); // Despertar al otro jugador
+	}
+	else
+	{
+	
+		printf("Invalid option\n");
+	}
 
 	return SOAP_OK;
 };

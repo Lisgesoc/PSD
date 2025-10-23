@@ -39,9 +39,7 @@ typedef enum players {player1, player2} tPlayer;
 typedef struct game{
 	
 	tPlayer currentPlayer;					/** Current player */
-	
-
-	
+		
 	xsd__string player1Name;				/** Name of player 1 */
 	blackJackns__tDeck player1Deck;			/** Player1's deck */
 	unsigned int player1Bet;				/** Player1's bet */
