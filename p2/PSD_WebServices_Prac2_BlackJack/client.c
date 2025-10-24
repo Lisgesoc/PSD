@@ -84,43 +84,40 @@ int main(int argc, char **argv)
 		printf("Usage: %s http://server:port\n", argv[0]);
 		exit(0);
 	}
-	printf("Enter your name:\n ");
-	fgets(playerName.msg, STRING_LENGTH - 1, stdin);
-	playerName.msg[strlen(playerName.msg) - 1] = 0;
+	
+	gameId = ERROR_NAME_REPEATED;
 
-	resCode = -1;
-	while (resCode < 0)
-	{
+	while(gameId == ERROR_NAME_REPEATED){
+		printf("Enter your name:\n ");
+		fgets(playerName.msg, STRING_LENGTH - 1, stdin);
+		playerName.msg[strlen(playerName.msg) - 1] = 0;
 
-		resCode = soap_call_blackJackns__register(&soap, serverURL, "", playerName, &gameId);
-		printf("El id del juego es: %d\n", gameId);
-		if (resCode == ERROR_SERVER_FULL)
-		{
-			printf("[Register] No available games\n");
-		}
-		else if (resCode == ERROR_NAME_REPEATED)
-		{
+		soap_call_blackJackns__register(&soap, serverURL, "", playerName, &gameId);
+		printf("[DEBUG] soap_call result: %d, gameId(returned): %d\n", resCode, gameId);
+		if(gameId == ERROR_NAME_REPEATED){
 			printf("[Register] Player name already taken. Please choose another name\n");
-			printf("Enter your name:\n ");
-			fgets(playerName.msg, STRING_LENGTH - 1, stdin);
-			playerName.msg[strlen(playerName.msg) - 1] = 0;
 		}
+		else if(gameId == ERROR_SERVER_FULL){
+			printf("[Register] No available games\n");
+			endGame = 1;
+		}
+
 	}
+
+	
 
 	while (!endGame)
 	{
 		soap_call_blackJackns__getStatus(&soap, serverURL, "", playerName, gameId, &gameStatus);
-		//printf("Stack: %u\n", gameStatus.playerStack);
-		//printf("Current bet: %u\n", gameStatus.currentBet);
-
-		printFancyDeck(&gameStatus.deck);
+		printStatus(&gameStatus, DEBUG_CLIENT);
 
 		while (gameStatus.code == TURN_PLAY)
 		{
 
 			playerMove = readOption();
 			soap_call_blackJackns__playerMove(&soap, serverURL, "", playerName, gameId, playerMove, &gameStatus);
-			printFancyDeck(&gameStatus.deck);
+
+			printStatus(&gameStatus, DEBUG_CLIENT);
 		}
 
 		switch (gameStatus.code)

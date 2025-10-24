@@ -8,7 +8,7 @@
 #define DEBUG_SERVER 1
 
 /** Maximum number of active games in the server */
-#define MAX_GAMES 5
+#define MAX_GAMES 1
 
 /** Initial stack for each player */
 #define INITIAL_STACK 4
