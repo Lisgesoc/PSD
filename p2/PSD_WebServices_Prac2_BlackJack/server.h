@@ -11,7 +11,7 @@
 #define MAX_GAMES 5
 
 /** Initial stack for each player */
-#define INITIAL_STACK 5
+#define INITIAL_STACK 4
 
 /** Default bet */
 #define DEFAULT_BET 4

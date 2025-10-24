@@ -16,6 +16,7 @@ void initGame(tGame *game)
 	clearDeck(&(game->player2Deck));
 	initDeck(&(game->gameDeck));
 
+
 	// GameCounter
 	game->handCount = 0;
 	// Bet and stack
@@ -137,6 +138,15 @@ void copyGameStatusStructure(blackJackns__tBlock *status, char *message, blackJa
 	// Set the new code
 	status->code = newCode;
 }
+void dealInitialCards(tGame *game) {
+
+    for(int i = 0; i < 2; i++) {
+        game->player1Deck.cards[i] = getRandomCard(&game->gameDeck);
+        game->player2Deck.cards[i] = getRandomCard(&game->gameDeck);
+    }
+    game->player1Deck.__size = 2;
+    game->player2Deck.__size = 2;
+}
 
 int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, int *result)
 {
@@ -179,6 +189,9 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 				strcpy(games[i].player2Name, playerName.msg);
 				games[i].status = gameReady;
 				games[i].currentPlayer = player1;
+				games[i].player1Bet = DEFAULT_BET;
+				games[i].player2Bet = DEFAULT_BET;
+				dealInitialCards(&games[i]);
 				*result = i;
 				code = SOAP_OK;
 				pthread_cond_signal(&games[i].startGameCond);
@@ -227,6 +240,15 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 	{
 		printf("[getStatus] %s espera su turno...\n", playerName.msg);
 		pthread_cond_wait(&game->turnCond, &game->mutex_status);
+		if (game->endOfGame)
+		{
+			if ((player == player1 && game->player1Stack == 0) || (player == player2 && game->player2Stack == 0))
+				copyGameStatusStructure(status, "You have run out of stack. Game over.", playerDeck, GAME_LOSE);
+			else
+				copyGameStatusStructure(status, "Your rival has run out of stack. You win!", playerDeck, GAME_WIN);
+			pthread_mutex_unlock(&games[gameId].mutex_status);
+			return SOAP_OK;
+		}
 	}
 
 	// Si le toca jugar
@@ -266,6 +288,7 @@ int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName,
 			game->currentPlayer = calculateNextPlayer(player);
 			copyGameStatusStructure(status, "Has superado los 21 puntos. Has perdido la partida.", playerDeck, GAME_LOSE);
 			game->handCount++;
+			game->endOfGame = TRUE;
 			pthread_cond_signal(&game->turnCond);
 		}
 	}
@@ -282,75 +305,55 @@ int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName,
 		printf("Invalid option\n");
 	}
 
-
 	if (game->handCount == 2)
 	{
-		
-	int pointsPlayer1 = calculatePoints(&game->player1Deck);
-	int pointsPlayer2 = calculatePoints(&game->player2Deck);
-
-		if (pointsPlayer1 > 21 && pointsPlayer2 > 21)
-		{
-			// Ambos jugadores se han pasado
-			printf("Both players busted! It's a tie.\n");
-		}
-		else if (pointsPlayer1 <= 21 && pointsPlayer2 >= 21)
-		{
-			// Jugador 1 gana
-			updatePlayerStack(game, 1);
-			printf("Player 1 wins the game!\n");
-		}
-		else if (pointsPlayer2 <= 21 && pointsPlayer1 >= 21)
-		{
-			// Jugador 2 gana
-			updatePlayerStack(game, 2);
-			printf("Player 2 wins the game!\n");
-		}
-		else if (pointsPlayer1 <= 21 && pointsPlayer2 <= 21)
-		{
-			// Ambos jugadores no se han pasado, se compara puntos
-			if (pointsPlayer1 > pointsPlayer2)
-			{
-				updatePlayerStack(game, 1);
-				printf("Player 1 wins the game!\n");
-			}
-			else if (pointsPlayer2 > pointsPlayer1)
-			{
-				updatePlayerStack(game, 2);
-				printf("Player 2 wins the game!\n");
-			}
-			else
-			{
-				printf("It's a tie between both players!\n");
-			}
-		}
-
-	
-
-			if(game->player1Stack == 0 && player == player1)
-				copyGameStatusStructure(status, "Player 1 has run out of stack. Game over.", playerDeck, GAME_LOSE);
-			
-			else if(game->player2Stack == 0 && player == player2)
-				copyGameStatusStructure(status, "Player 2 has run out of stack. Game over.", playerDeck, GAME_LOSE);
-			
-			else if(game->player1Stack == 0 && player == player2)
-				copyGameStatusStructure(status, "Player 1 has run out of stack. You win!", playerDeck, GAME_WIN);
-			
-			else if(game->player2Stack == 0 && player == player1)
-				copyGameStatusStructure(status, "Player 2 has run out of stack. You win!", playerDeck, GAME_WIN);
-			
-		
-				
-			printf("Stacks after hand %d: Player 1: %u, Player 2: %u\n", game->handCount, game->player1Stack, game->player2Stack);	
-		
-			game->endOfGame = TRUE;
-		
-		game->handCount = 0;
-
+ 		handleEndOfHand(game, status, player, playerDeck);	
 	}
 
 	return SOAP_OK;
 };
+
+void handleEndOfHand(tGame *game, blackJackns__tBlock *status, tPlayer player, blackJackns__tDeck *playerDeck) {
+    int pointsPlayer1 = calculatePoints(&game->player1Deck);
+    int pointsPlayer2 = calculatePoints(&game->player2Deck);
+
+    // Determinar ganador
+    if (pointsPlayer1 > 21 && pointsPlayer2 > 21) {
+        printf("Both players busted! It's a tie.\n");
+    } else if (pointsPlayer1 <= 21 && pointsPlayer2 > 21) {
+        updatePlayerStack(game, 1);
+        printf("Player 1 wins the game!\n");
+    } else if (pointsPlayer2 <= 21 && pointsPlayer1 > 21) {
+        updatePlayerStack(game, 2);
+        printf("Player 2 wins the game!\n");
+    } else if (pointsPlayer1 <= 21 && pointsPlayer2 <= 21) {
+        if (pointsPlayer1 > pointsPlayer2) {
+            updatePlayerStack(game, 1);
+            printf("Player 1 wins the game!\n");
+        } else if (pointsPlayer2 > pointsPlayer1) {
+            updatePlayerStack(game, 2);
+            printf("Player 2 wins the game!\n");
+        } else {
+            printf("It's a tie between both players!\n");
+        }
+    }
+
+    // Actualizar estado según stack
+    if (game->player1Stack == 0 && player == player1)
+        copyGameStatusStructure(status, "Player 1 has run out of stack. Game over.", playerDeck, GAME_LOSE);
+    else if (game->player2Stack == 0 && player == player2)
+        copyGameStatusStructure(status, "Player 2 has run out of stack. Game over.", playerDeck, GAME_LOSE);
+    else if (game->player1Stack == 0 && player == player2)
+        copyGameStatusStructure(status, "Player 1 has run out of stack. You win!", playerDeck, GAME_WIN);
+    else if (game->player2Stack == 0 && player == player1)
+        copyGameStatusStructure(status, "Player 2 has run out of stack. You win!", playerDeck, GAME_WIN);
+
+    printf("Stacks after hand %d: Player 1: %u, Player 2: %u\n", 
+           game->handCount, game->player1Stack, game->player2Stack);
+
+    game->endOfGame = TRUE;
+    game->handCount = 0;
+}
 
 void updatePlayerStack(tGame *game, int winner)
 {
