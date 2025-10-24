@@ -11,10 +11,10 @@
 #define MAX_GAMES 5
 
 /** Initial stack for each player */
-#define INITIAL_STACK 1
+#define INITIAL_STACK 4
 
 /** Default bet */
-#define DEFAULT_BET 1
+#define DEFAULT_BET 4
 
 /** Number of points to win the game */
 #define GOAL_GAME 21
@@ -55,7 +55,7 @@ typedef struct game{
 	tGameState status;						/** Flag to indicate the status of this game */
 	
     
-	
+	int handCount;                        	/** Number of hands played in the game */
 
 	pthread_mutex_t mutex_register;
  	pthread_cond_t  startGameCond;
