@@ -16,7 +16,6 @@ void initGame(tGame *game)
 	clearDeck(&(game->player2Deck));
 	initDeck(&(game->gameDeck));
 
-
 	// GameCounter
 	game->handCount = 0;
 	// Bet and stack
@@ -138,20 +137,22 @@ void copyGameStatusStructure(blackJackns__tBlock *status, char *message, blackJa
 	// Set the new code
 	status->code = newCode;
 }
-void dealInitialCards(tGame *game) {
+void dealInitialCards(tGame *game)
+{
 
-    for(int i = 0; i < 2; i++) {
-        game->player1Deck.cards[i] = getRandomCard(&game->gameDeck);
-        game->player2Deck.cards[i] = getRandomCard(&game->gameDeck);
-    }
-    game->player1Deck.__size = 2;
-    game->player2Deck.__size = 2;
+	for (int i = 0; i < 2; i++)
+	{
+		game->player1Deck.cards[i] = getRandomCard(&game->gameDeck);
+		game->player2Deck.cards[i] = getRandomCard(&game->gameDeck);
+	}
+	game->player1Deck.__size = 2;
+	game->player2Deck.__size = 2;
 }
 
 int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, int *result)
 {
 
-	int gameIndex, code;
+	int gameIndex;
 
 	// Set \0 at the end of the string
 	playerName.msg[playerName.__size] = 0;
@@ -163,6 +164,7 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 	int found = FALSE;
 	while (i < MAX_GAMES && !found)
 	{
+
 		pthread_mutex_lock(&games[i].mutex_register);
 		if (games[i].status == gameEmpty)
 		{
@@ -172,7 +174,6 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 
 			*result = i;
 			found = TRUE;
-			code = SOAP_OK;
 			pthread_cond_wait(&games[i].startGameCond, &games[i].mutex_register);
 		}
 		else if (games[i].status == gameWaitingPlayer)
@@ -182,7 +183,7 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 			if (strcmp(games[i].player1Name, playerName.msg) == 0)
 			{
 				printf("[Register] Player name already taken in game %d\n", i);
-				code = ERROR_NAME_REPEATED;
+				*result = ERROR_NAME_REPEATED;
 			}
 			else
 			{
@@ -193,7 +194,6 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 				games[i].player2Bet = DEFAULT_BET;
 				dealInitialCards(&games[i]);
 				*result = i;
-				code = SOAP_OK;
 				pthread_cond_signal(&games[i].startGameCond);
 			}
 			found = TRUE;
@@ -204,14 +204,14 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 		printf("Numero de sala: %d\n", i);
 	}
 
-	if (i == MAX_GAMES && !found)
+	if (!found)
 	{
 
-		code = ERROR_SERVER_FULL;
+		*result = ERROR_SERVER_FULL;
 		if (DEBUG_SERVER)
 			printf("[Register] No available games\n");
 	}
-	return code;
+	return SOAP_OK;
 }
 /*
 	getStatus debe devolver al jugador el estado actual de su partida.
@@ -236,9 +236,10 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 	blackJackns__tDeck *playerDeck = (player == player1) ? &game->player1Deck : &game->player2Deck;
 
 	pthread_mutex_lock(&games[gameId].mutex_status);
-	while (game->currentPlayer != player)
+	if (game->currentPlayer != player)
 	{
 		printf("[getStatus] %s espera su turno...\n", playerName.msg);
+
 		pthread_cond_wait(&game->turnCond, &game->mutex_status);
 		if (game->endOfGame)
 		{
@@ -247,6 +248,8 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 			else
 				copyGameStatusStructure(status, "Your rival has run out of stack. You win!", playerDeck, GAME_WIN);
 			pthread_mutex_unlock(&games[gameId].mutex_status);
+
+			initGame(&games[gameId]); //Para reiniciar el juego cuando acaban los dos jugadores
 			return SOAP_OK;
 		}
 	}
@@ -307,52 +310,65 @@ int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName,
 
 	if (game->handCount == 2)
 	{
- 		handleEndOfHand(game, status, player, playerDeck);	
+		handleEndOfHand(game, status, player, playerDeck);
 	}
 
 	return SOAP_OK;
 };
 
-void handleEndOfHand(tGame *game, blackJackns__tBlock *status, tPlayer player, blackJackns__tDeck *playerDeck) {
-    int pointsPlayer1 = calculatePoints(&game->player1Deck);
-    int pointsPlayer2 = calculatePoints(&game->player2Deck);
+void handleEndOfHand(tGame *game, blackJackns__tBlock *status, tPlayer player, blackJackns__tDeck *playerDeck)
+{
+	int pointsPlayer1 = calculatePoints(&game->player1Deck);
+	int pointsPlayer2 = calculatePoints(&game->player2Deck);
 
-    // Determinar ganador
-    if (pointsPlayer1 > 21 && pointsPlayer2 > 21) {
-        printf("Both players busted! It's a tie.\n");
-    } else if (pointsPlayer1 <= 21 && pointsPlayer2 > 21) {
-        updatePlayerStack(game, 1);
-        printf("Player 1 wins the game!\n");
-    } else if (pointsPlayer2 <= 21 && pointsPlayer1 > 21) {
-        updatePlayerStack(game, 2);
-        printf("Player 2 wins the game!\n");
-    } else if (pointsPlayer1 <= 21 && pointsPlayer2 <= 21) {
-        if (pointsPlayer1 > pointsPlayer2) {
-            updatePlayerStack(game, 1);
-            printf("Player 1 wins the game!\n");
-        } else if (pointsPlayer2 > pointsPlayer1) {
-            updatePlayerStack(game, 2);
-            printf("Player 2 wins the game!\n");
-        } else {
-            printf("It's a tie between both players!\n");
-        }
-    }
+	// Determinar ganador
+	if (pointsPlayer1 > 21 && pointsPlayer2 > 21)
+	{
+		printf("Both players busted! It's a tie.\n");
+	}
+	else if (pointsPlayer1 <= 21 && pointsPlayer2 > 21)
+	{
+		updatePlayerStack(game, 1);
+		printf("Player 1 wins the game!\n");
+	}
+	else if (pointsPlayer2 <= 21 && pointsPlayer1 > 21)
+	{
+		updatePlayerStack(game, 2);
+		printf("Player 2 wins the game!\n");
+	}
+	else if (pointsPlayer1 <= 21 && pointsPlayer2 <= 21)
+	{
+		if (pointsPlayer1 > pointsPlayer2)
+		{
+			updatePlayerStack(game, 1);
+			printf("Player 1 wins the game!\n");
+		}
+		else if (pointsPlayer2 > pointsPlayer1)
+		{
+			updatePlayerStack(game, 2);
+			printf("Player 2 wins the game!\n");
+		}
+		else
+		{
+			printf("It's a tie between both players!\n");
+		}
+	}
 
-    // Actualizar estado según stack
-    if (game->player1Stack == 0 && player == player1)
-        copyGameStatusStructure(status, "Player 1 has run out of stack. Game over.", playerDeck, GAME_LOSE);
-    else if (game->player2Stack == 0 && player == player2)
-        copyGameStatusStructure(status, "Player 2 has run out of stack. Game over.", playerDeck, GAME_LOSE);
-    else if (game->player1Stack == 0 && player == player2)
-        copyGameStatusStructure(status, "Player 1 has run out of stack. You win!", playerDeck, GAME_WIN);
-    else if (game->player2Stack == 0 && player == player1)
-        copyGameStatusStructure(status, "Player 2 has run out of stack. You win!", playerDeck, GAME_WIN);
+	// Actualizar estado según stack
+	if (game->player1Stack == 0 && player == player1)
+		copyGameStatusStructure(status, "Player 1 has run out of stack. Game over.", playerDeck, GAME_LOSE);
+	else if (game->player2Stack == 0 && player == player2)
+		copyGameStatusStructure(status, "Player 2 has run out of stack. Game over.", playerDeck, GAME_LOSE);
+	else if (game->player1Stack == 0 && player == player2)
+		copyGameStatusStructure(status, "Player 1 has run out of stack. You win!", playerDeck, GAME_WIN);
+	else if (game->player2Stack == 0 && player == player1)
+		copyGameStatusStructure(status, "Player 2 has run out of stack. You win!", playerDeck, GAME_WIN);
 
-    printf("Stacks after hand %d: Player 1: %u, Player 2: %u\n", 
-           game->handCount, game->player1Stack, game->player2Stack);
+	printf("Stacks after hand %d: Player 1: %u, Player 2: %u\n",
+		   game->handCount, game->player1Stack, game->player2Stack);
 
-    game->endOfGame = TRUE;
-    game->handCount = 0;
+	game->endOfGame = TRUE;
+	//game->handCount = 0;
 }
 
 void updatePlayerStack(tGame *game, int winner)
