@@ -248,6 +248,8 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 			else
 				copyGameStatusStructure(status, "Your rival has run out of stack. You win!", playerDeck, GAME_WIN);
 			pthread_mutex_unlock(&games[gameId].mutex_status);
+
+			initGame(&games[gameId]); //Para reiniciar el juego cuando acaban los dos jugadores
 			return SOAP_OK;
 		}
 	}
@@ -366,7 +368,7 @@ void handleEndOfHand(tGame *game, blackJackns__tBlock *status, tPlayer player, b
 		   game->handCount, game->player1Stack, game->player2Stack);
 
 	game->endOfGame = TRUE;
-	game->handCount = 0;
+	//game->handCount = 0;
 }
 
 void updatePlayerStack(tGame *game, int winner)
