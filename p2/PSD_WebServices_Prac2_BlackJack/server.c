@@ -36,6 +36,33 @@ void initGame(tGame *game)
 	pthread_cond_init(&game->startGameCond, NULL);
 }
 
+void clearGame(tGame *game)
+{
+
+	// Init players' name
+	memset(game->player1Name, 0, STRING_LENGTH);
+	memset(game->player2Name, 0, STRING_LENGTH);
+
+	// Alloc memory for the decks
+	clearDeck(&(game->player1Deck));
+	clearDeck(&(game->player2Deck));
+	initDeck(&(game->gameDeck));
+
+	// GameCounter
+	game->handCount = 0;
+	// Bet and stack
+	game->player1Bet = 0;
+	game->player2Bet = 0;
+	game->player1Stack = INITIAL_STACK;
+	game->player2Stack = INITIAL_STACK;
+
+	// Game status variables
+	game->endOfGame = FALSE;
+	game->status = gameEmpty;
+
+
+}
+
 void initServerStructures(struct soap *soap)
 {
 
@@ -168,8 +195,9 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 		pthread_mutex_lock(&games[i].mutex_register);
 		if (games[i].status == gameEmpty)
 		{
-			initGame(&(games[i]));
+			pthread_mutex_lock(&games[i].mutex_status);
 			strcpy(games[i].player1Name, playerName.msg);
+			pthread_mutex_unlock(&games[i].mutex_status);
 			games[i].status = gameWaitingPlayer;
 
 			*result = i;
@@ -187,12 +215,16 @@ int blackJackns__register(struct soap *soap, blackJackns__tMessage playerName, i
 			}
 			else
 			{
+				
+				pthread_mutex_lock(&games[i].mutex_status);
 				strcpy(games[i].player2Name, playerName.msg);
 				games[i].status = gameReady;
 				games[i].currentPlayer = player1;
 				games[i].player1Bet = DEFAULT_BET;
 				games[i].player2Bet = DEFAULT_BET;
 				dealInitialCards(&games[i]);
+				pthread_mutex_unlock(&games[i].mutex_status);
+
 				*result = i;
 				pthread_cond_signal(&games[i].startGameCond);
 			}
@@ -235,27 +267,37 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 
 	blackJackns__tDeck *playerDeck = (player == player1) ? &game->player1Deck : &game->player2Deck;
 
+
+
 	pthread_mutex_lock(&games[gameId].mutex_status);
 	if (game->currentPlayer != player)
-	{
+	{	
 		printf("[getStatus] %s espera su turno...\n", playerName.msg);
 
 		pthread_cond_wait(&game->turnCond, &game->mutex_status);
+		printf("holaaaaaaaaa");
+
+		blackJackns__tDeck *otherplayerDeck = (player == player1) ? &game->player2Deck : &game->player1Deck;
+			printFancyDeck(otherplayerDeck);
+
+		copyGameStatusStructure(status, "Yaaaaaaaaaaaaaaa", otherplayerDeck, TURN_WAIT);
 		if (game->endOfGame)
 		{
 			if ((player == player1 && game->player1Stack == 0) || (player == player2 && game->player2Stack == 0))
 				copyGameStatusStructure(status, "You have run out of stack. Game over.", playerDeck, GAME_LOSE);
 			else
-				copyGameStatusStructure(status, "Your rival has run out of stack. You win!", playerDeck, GAME_WIN);
+				copyGameStatusStructure(status, "Your rival has run out of stack. You win!", otherplayerDeck, GAME_WIN);
 			pthread_mutex_unlock(&games[gameId].mutex_status);
 
-			initGame(&games[gameId]); //Para reiniciar el juego cuando acaban los dos jugadores
+			clearGame(&games[gameId]); //Para reiniciar el juego cuando acaban los dos jugadores
 			return SOAP_OK;
 		}
 	}
+	if(game->currentPlayer==player && !game->endOfGame){
+		// Si le toca jugar
+		copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", playerDeck, TURN_PLAY);
 
-	// Si le toca jugar
-	copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", playerDeck, TURN_PLAY);
+	}
 
 	printf("[DEBUG] Código asignado: %d\n", status->code);
 	pthread_mutex_unlock(&games[gameId].mutex_status);
@@ -273,6 +315,7 @@ int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName,
 
 	blackJackns__tDeck *playerDeck = (player == player1) ? &game->player1Deck : &game->player2Deck;
 
+
 	printf("playerMove\n");
 	if (action == PLAYER_HIT_CARD)
 	{
@@ -284,6 +327,7 @@ int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName,
 		{
 			printf("Player %d has %d points.\n", player + 1, points);
 			copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", playerDeck, TURN_PLAY);
+			pthread_cond_signal(&game->turnCond);
 		}
 		else
 		{
@@ -312,7 +356,6 @@ int blackJackns__playerMove(struct soap *soap, blackJackns__tMessage playerName,
 	{
 		handleEndOfHand(game, status, player, playerDeck);
 	}
-
 	return SOAP_OK;
 };
 

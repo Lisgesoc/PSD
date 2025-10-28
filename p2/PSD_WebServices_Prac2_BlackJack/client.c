@@ -110,7 +110,6 @@ int main(int argc, char **argv)
 	{
 		soap_call_blackJackns__getStatus(&soap, serverURL, "", playerName, gameId, &gameStatus);
 		printStatus(&gameStatus, DEBUG_CLIENT);
-
 		while (gameStatus.code == TURN_PLAY)
 		{
 
@@ -125,6 +124,7 @@ int main(int argc, char **argv)
 		case TURN_WAIT:
 			printf("\n");
 			printf("Waiting for your turn...\n");
+			printStatus(&gameStatus, DEBUG_CLIENT);
 			break;
 		case GAME_LOSE:
 			printf("\n");
@@ -136,7 +136,7 @@ int main(int argc, char **argv)
 			printf("You win the hand\n");
 			endGame = 1;
 			break;
-		default:
+		default:			
 			break;
 		}
 	}
