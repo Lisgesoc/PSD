@@ -124,7 +124,7 @@ int main(int argc, char **argv)
 		case TURN_WAIT:
 			printf("\n");
 			printf("Waiting for your turn...\n");
-			printStatus(&gameStatus, DEBUG_CLIENT);
+			//printStatus(&gameStatus, DEBUG_CLIENT);
 			break;
 		case GAME_LOSE:
 			printf("\n");

@@ -278,13 +278,14 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 		printf("holaaaaaaaaa");
 
 		blackJackns__tDeck *otherplayerDeck = (player == player1) ? &game->player2Deck : &game->player1Deck;
-			printFancyDeck(otherplayerDeck);
+		
+		printFancyDeck(otherplayerDeck);
 
-		copyGameStatusStructure(status, "Yaaaaaaaaaaaaaaa", otherplayerDeck, TURN_WAIT);
+		copyGameStatusStructure(status, "Cards from active player", otherplayerDeck, TURN_WAIT);
 		if (game->endOfGame)
 		{
 			if ((player == player1 && game->player1Stack == 0) || (player == player2 && game->player2Stack == 0))
-				copyGameStatusStructure(status, "You have run out of stack. Game over.", playerDeck, GAME_LOSE);
+				copyGameStatusStructure(status, "You have run out of stack. Game over.", otherplayerDeck, GAME_LOSE);
 			else
 				copyGameStatusStructure(status, "Your rival has run out of stack. You win!", otherplayerDeck, GAME_WIN);
 			pthread_mutex_unlock(&games[gameId].mutex_status);
@@ -293,7 +294,7 @@ int blackJackns__getStatus(struct soap *soap, blackJackns__tMessage playerName, 
 			return SOAP_OK;
 		}
 	}
-	if(game->currentPlayer==player && !game->endOfGame){
+	else if(game->currentPlayer==player && !game->endOfGame){
 		// Si le toca jugar
 		copyGameStatusStructure(status, "Tu turno. Elige una acción: pedir carta o plantarte.", playerDeck, TURN_PLAY);
 
