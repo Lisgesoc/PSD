@@ -8,7 +8,7 @@
 #define DEBUG_FILTERING 0
 
 /** Show information of input and output bitmap headers */
-#define SHOW_BMP_HEADERS 0
+#define SHOW_BMP_HEADERS 1
 
 
 int main(int argc, char** argv){
@@ -40,6 +40,8 @@ int main(int argc, char** argv){
 	double timeStart, timeEnd;						/** Time stamps to calculate the filtering time */
 	int size, rank, tag;							/** Number of process, rank and tag */
 	MPI_Status status;								/** Status information for received messages */
+
+
 
 
 		// Init
@@ -90,7 +92,20 @@ int main(int argc, char** argv){
 
 			// Calculate row size for input and output images
 			rowSize = (((imgInfoHeaderInput.biBitCount * imgInfoHeaderInput.biWidth) + 31) / 32 ) * 4;
-		
+			
+
+			rowsPerProcess = abs(imgInfoHeaderInput.biHeight) / (size - 1); //Numero de filas por worker
+			rowsSentToWorker = rowsPerProcess;
+			imageDimensions[0] = imgInfoHeaderInput.biWidth;   //Ancho y alto de la imagen
+			imageDimensions[1] = imgInfoHeaderInput.biHeight;
+
+			currentWorker = size - 1;
+			printf("numWorkers: %d\n", currentWorker);
+			for (currentWorker = 1; currentWorker < size; currentWorker++) {
+    			MPI_Send(imageDimensions, 2, MPI_INT, currentWorker, tag, MPI_COMM_WORLD);
+    			MPI_Send(&threshold, 1, MPI_INT, currentWorker, tag, MPI_COMM_WORLD);
+			}
+			printf("rowsPerProcess: %d\n", rowsPerProcess);
 			// Show headers...
 			if (SHOW_BMP_HEADERS){
 				printf ("Source BMP headers:\n");
@@ -119,9 +134,7 @@ int main(int argc, char** argv){
 			read (inputFile, outputBuffer, imgFileHeaderInput.bfOffBits-BIMAP_HEADERS_SIZE);
 			write (outputFile, outputBuffer, imgFileHeaderInput.bfOffBits-BIMAP_HEADERS_SIZE);
 
-			
-			
-			
+		
 			
 			
 			

@@ -8,7 +8,7 @@
 #define DEBUG_FILTERING 0
 
 /** Show information of input and output bitmap headers */
-#define SHOW_BMP_HEADERS 0
+#define SHOW_BMP_HEADERS 1
 
 
 int main(int argc, char** argv){
