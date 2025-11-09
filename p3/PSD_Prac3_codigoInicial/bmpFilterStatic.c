@@ -1,168 +1,236 @@
 #include "bmpBlackWhite.h"
 #include "mpi.h"
+#include <time.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
 
 /** Show log messages */
 #define SHOW_LOG_MESSAGES 1
-
 /** Enable output for filtering information */
 #define DEBUG_FILTERING 0
-
 /** Show information of input and output bitmap headers */
 #define SHOW_BMP_HEADERS 1
 
+int main(int argc, char** argv) {
 
-int main(int argc, char** argv){
+    tBitmapFileHeader imgFileHeaderInput;
+    tBitmapInfoHeader imgInfoHeaderInput;
+    tBitmapFileHeader imgFileHeaderOutput;
+    tBitmapInfoHeader imgInfoHeaderOutput;
+    char* sourceFileName;
+    char* destinationFileName;
+    int inputFile, outputFile;
+    unsigned char *inputBuffer;       // Buffer con la imagen original
+    unsigned char *outputBuffer;      // Buffer temporal para cabeceras
+    unsigned int rowSize;             // Tamaño de cada fila en bytes
+    unsigned int rowsPerProcess;      // Filas por worker
+    unsigned int threshold;           // Umbral
+    unsigned int imageHeight, imageWidth;
+    unsigned int totalImageBytes;
+    double timeStart, timeEnd;
+    int size, rank, tag;
+    MPI_Status status;
 
-	tBitmapFileHeader imgFileHeaderInput;			/** BMP file header for input image */
-	tBitmapInfoHeader imgInfoHeaderInput;			/** BMP info header for input image */
-	tBitmapFileHeader imgFileHeaderOutput;			/** BMP file header for output image */
-	tBitmapInfoHeader imgInfoHeaderOutput;			/** BMP info header for output image */
-	char* sourceFileName;							/** Name of input image file */
-	char* destinationFileName;						/** Name of output image file */
-	int inputFile, outputFile;						/** File descriptors */
-	unsigned char *outputBuffer;					/** Output buffer for filtered pixels */
-	unsigned char *inputBuffer;						/** Input buffer to allocate original pixels */
-	unsigned char *auxPtr;							/** Auxiliary pointer */
-	unsigned int rowSize;							/** Number of pixels per row */
-	unsigned int rowsPerProcess;					/** Number of rows to be processed (at most) by each worker */
-	unsigned int rowsSentToWorker;					/** Number of rows to be sent to a worker process */
-	unsigned int threshold;							/** Threshold */
-	unsigned int currentRow;						/** Current row being processed */
-	unsigned int currentPixel;						/** Current pixel being processed */
-	unsigned int outputPixel;						/** Output pixel */
-	unsigned int readBytes;							/** Number of bytes read from input file */
-	unsigned int writeBytes;						/** Number of bytes written to output file */
-	unsigned int totalBytes;						/** Total number of bytes to send/receive a message */
-	unsigned int numPixels;							/** Number of neighbour pixels (including current pixel) */
-	unsigned int currentWorker;						/** Current worker process */
-	tPixelVector vector;							/** Vector of neighbour pixels */
-	int imageDimensions[2];							/** Dimensions of input image */
-	double timeStart, timeEnd;						/** Time stamps to calculate the filtering time */
-	int size, rank, tag;							/** Number of process, rank and tag */
-	MPI_Status status;								/** Status information for received messages */
+    // Inicialización de MPI
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    tag = 1;
+    srand(time(NULL));
 
+    // Verificación de número de procesos
+    if (size <= 2) {
+        if (rank == 0)
+            printf("This program must be launched with (at least) 3 processes\n");
+        MPI_Finalize();
+        exit(0);
+    }
 
+    // Verificación de argumentos
+    if (argc != 4) {
+        if (rank == 0)
+            printf("Usage: ./bmpFilterStatic sourceFile destinationFile threshold\n");
+        MPI_Finalize();
+        exit(0);
+    }
 
+    // Argumentos
+    sourceFileName = argv[1];
+    destinationFileName = argv[2];
+    threshold = atoi(argv[3]);
 
-		// Init
-		MPI_Init(&argc, &argv);
-		MPI_Comm_size(MPI_COMM_WORLD, &size);
-		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-		tag = 1;
-		srand(time(NULL));
+    // ==========================
+    // MASTER PROCESS
+    // ==========================
+    if (rank == 0) {
 
-		// Check the number of processes
-		if (size<=2){
+        timeStart = MPI_Wtime();
 
-			if (rank == 0)
-				printf ("This program must be launched with (at least) 3 processes\n");
+        // Leer cabeceras del BMP
+        readHeaders(sourceFileName, &imgFileHeaderInput, &imgInfoHeaderInput);
+        imgFileHeaderOutput = imgFileHeaderInput;
+        imgInfoHeaderOutput = imgInfoHeaderInput;
 
-			MPI_Finalize();
-			exit(0);
-		}
+        // Calcular dimensiones y tamaño de fila
+        rowSize = (((imgInfoHeaderInput.biBitCount * imgInfoHeaderInput.biWidth) + 31) / 32) * 4;
+        imageWidth = imgInfoHeaderInput.biWidth;
+        imageHeight = abs(imgInfoHeaderInput.biHeight);
+        totalImageBytes = rowSize * imageHeight;
 
-		// Check arguments
-		if (argc != 4){
+        // Crear archivo de salida con las cabeceras
+        writeHeaders(destinationFileName, &imgFileHeaderOutput, &imgInfoHeaderOutput);
 
-			if (rank == 0)
-				printf ("Usage: ./bmpFilterStatic sourceFile destinationFile threshold\n");
+        // Mostrar información opcional
+        if (SHOW_BMP_HEADERS) {
+            printf("Source BMP headers:\n");
+            printBitmapHeaders(&imgFileHeaderInput, &imgInfoHeaderInput);
+            printf("Destination BMP headers:\n");
+            printBitmapHeaders(&imgFileHeaderOutput, &imgInfoHeaderOutput);
+        }
 
-			MPI_Finalize();
-			exit(0);
-		}
+        // Abrir archivo fuente y leer los datos de píxeles
+        if ((inputFile = open(sourceFileName, O_RDONLY)) < 0) {
+            printf("ERROR: Source file cannot be opened: %s\n", sourceFileName);
+            exit(1);
+        }
 
-		// Get input arguments...
-		sourceFileName = argv[1];
-		destinationFileName = argv[2];
-		threshold = atoi(argv[3]);
+        // Reservar memoria y cargar los píxeles en memoria
+        inputBuffer = (unsigned char*) malloc(totalImageBytes);
+        if (!inputBuffer) {
+            printf("ERROR: Cannot allocate memory for input image\n");
+            close(inputFile);
+            exit(1);
+        }
+        lseek(inputFile, imgFileHeaderInput.bfOffBits, SEEK_SET);
+        read(inputFile, inputBuffer, totalImageBytes);
+        close(inputFile);
 
+        // Distribuir filas entre workers
+        int numWorkers = size - 1;
+        rowsPerProcess = imageHeight / numWorkers;
+        int extra = imageHeight % numWorkers;
 
-		// Master process
-		if (rank == 0){
+        if (SHOW_LOG_MESSAGES)
+            printf("Master: numWorkers=%d, rowsPerProcess=%u, extra=%d\n", numWorkers, rowsPerProcess, extra);
 
-			// Process starts
-			timeStart = MPI_Wtime();
+        // Enviar a todos los workers: dimensiones y threshold
+        int imageDimensions[3] = { imageWidth, imageHeight,imgInfoHeaderInput.biBitCount };
+        for (int worker = 1; worker <= numWorkers; worker++) {
+            MPI_Send(imageDimensions, 3, MPI_INT, worker, tag, MPI_COMM_WORLD);
+            MPI_Send(&threshold, 1, MPI_INT, worker, tag, MPI_COMM_WORLD);
+        }
 
-			// Read headers from input file
-			readHeaders (sourceFileName, &imgFileHeaderInput, &imgInfoHeaderInput);
-			readHeaders (sourceFileName, &imgFileHeaderOutput, &imgInfoHeaderOutput);
+        // Abrir archivo de salida (ya creado con las cabeceras)
+        if ((outputFile = open(destinationFileName, O_WRONLY)) < 0) {
+            printf("ERROR: Target file cannot be opened for writing: %s\n", destinationFileName);
+            exit(1);
+        }
+       
+        // Enviar bloques de filas a cada worker
+        unsigned int currentRow = 0;
+        for (int worker = 1; worker <= numWorkers; worker++) {
+             
+            int assignedRows = rowsPerProcess + (worker <= extra ? 1 : 0);
+            int bytesToSend = assignedRows * rowSize;
+            MPI_Send(&assignedRows, 1, MPI_INT, worker, tag, MPI_COMM_WORLD);
+            MPI_Send(inputBuffer + (currentRow * rowSize), bytesToSend, MPI_UNSIGNED_CHAR, worker, tag, MPI_COMM_WORLD);
+            if (SHOW_LOG_MESSAGES)
+                printf("Master: sent %d rows (%d bytes) to worker %d (rows %u..%u)\n",
+                       assignedRows, bytesToSend, worker, currentRow, currentRow + assignedRows - 1);
 
-			// Write header to the output file
-			writeHeaders (destinationFileName, &imgFileHeaderOutput, &imgInfoHeaderOutput);
+            currentRow += assignedRows;
+            
+        }
+         
 
-			// Calculate row size for input and output images
-			rowSize = (((imgInfoHeaderInput.biBitCount * imgInfoHeaderInput.biWidth) + 31) / 32 ) * 4;
-			
+        // Recibir bloques procesados de los workers y escribirlos en el archivo final
+        currentRow = 0;
+        for (int worker = 1; worker <= numWorkers; worker++) {
+    
+            int assignedRows = rowsPerProcess + (worker <= extra ? 1 : 0);
+            int bytesToRecv = assignedRows * rowSize;
 
-			rowsPerProcess = abs(imgInfoHeaderInput.biHeight) / (size - 1); //Numero de filas por worker
-			rowsSentToWorker = rowsPerProcess;
-			imageDimensions[0] = imgInfoHeaderInput.biWidth;   //Ancho y alto de la imagen
-			imageDimensions[1] = imgInfoHeaderInput.biHeight;
+            unsigned char *recvBuffer = (unsigned char*) malloc(bytesToRecv);
+            MPI_Recv(recvBuffer, bytesToRecv, MPI_UNSIGNED_CHAR, worker, tag, MPI_COMM_WORLD, &status);
 
-			currentWorker = size - 1;
-			printf("numWorkers: %d\n", currentWorker);
-			for (currentWorker = 1; currentWorker < size; currentWorker++) {
-    			MPI_Send(imageDimensions, 2, MPI_INT, currentWorker, tag, MPI_COMM_WORLD);
-    			MPI_Send(&threshold, 1, MPI_INT, currentWorker, tag, MPI_COMM_WORLD);
-			}
-			printf("rowsPerProcess: %d\n", rowsPerProcess);
-			// Show headers...
-			if (SHOW_BMP_HEADERS){
-				printf ("Source BMP headers:\n");
-				printBitmapHeaders (&imgFileHeaderInput, &imgInfoHeaderInput);
-				printf ("Destination BMP headers:\n");
-				printBitmapHeaders (&imgFileHeaderOutput, &imgInfoHeaderOutput);
-			}
+            // Escribir en la posición correspondiente del archivo
+            lseek(outputFile, imgFileHeaderOutput.bfOffBits + (off_t)currentRow * rowSize, SEEK_SET);
+            write(outputFile, recvBuffer, bytesToRecv);
+            free(recvBuffer);
 
-			// Open source image
-			if((inputFile = open(sourceFileName, O_RDONLY)) < 0){
-				printf("ERROR: Source file cannot be opened: %s\n", sourceFileName);
-				exit(1);
-			}
+            if (SHOW_LOG_MESSAGES)
+                printf("Master: received %d rows (%d bytes) from worker %d and wrote rows %u..%u\n",
+                       assignedRows, bytesToRecv, worker, currentRow, currentRow + assignedRows - 1);
 
-			// Open target image
-			if((outputFile = open(destinationFileName, O_WRONLY | O_APPEND, 0777)) < 0){
-				printf("ERROR: Target file cannot be open to append data: %s\n", destinationFileName);
-				exit(1);
-			}
+            currentRow += assignedRows;
+        }
 
-			// Allocate memory to copy the bytes between the header and the image data
-			outputBuffer = (unsigned char*) malloc ((imgFileHeaderInput.bfOffBits-BIMAP_HEADERS_SIZE) * sizeof(unsigned char));
+        // Cerrar y liberar
+        close(outputFile);
+        free(inputBuffer);
 
-			// Copy bytes between headers and pixels
-			lseek (inputFile, BIMAP_HEADERS_SIZE, SEEK_SET);
-			read (inputFile, outputBuffer, imgFileHeaderInput.bfOffBits-BIMAP_HEADERS_SIZE);
-			write (outputFile, outputBuffer, imgFileHeaderInput.bfOffBits-BIMAP_HEADERS_SIZE);
+        timeEnd = MPI_Wtime();
+        printf("\nFiltering time: %f seconds\n", timeEnd - timeStart);
+    }
 
-		
-			
-			
-			
+    // ==========================
+    // WORKER PROCESS
+    // ==========================
+    else {
+        int imgDimensions[3];
+        MPI_Recv(imgDimensions, 3, MPI_INT, 0, tag, MPI_COMM_WORLD, &status);
+        MPI_Recv(&threshold, 1, MPI_INT, 0, tag, MPI_COMM_WORLD, &status);
 
-			// Close files
-			close (inputFile);
-			close (outputFile);
+        unsigned int imgWidth = imgDimensions[0];
+        unsigned int imgHeight = imgDimensions[1];
+        unsigned int bitCount = imgDimensions[2];
+       
 
-			// Process ends
-			timeEnd = MPI_Wtime();
+        rowSize = (((bitCount * imgWidth) + 31) / 32) * 4;
 
-			// Show processing time
-			printf("Filtering time: %f\n",timeEnd-timeStart);
-		}
+        int assignedRows;
+        MPI_Recv(&assignedRows, 1, MPI_INT, 0, tag, MPI_COMM_WORLD, &status);
+        unsigned int bytesToReceive = assignedRows * rowSize;
 
+        unsigned char *bufferWorker = (unsigned char*) malloc(bytesToReceive);
+        MPI_Recv(bufferWorker, bytesToReceive, MPI_UNSIGNED_CHAR, 0, tag, MPI_COMM_WORLD, &status);
 
-		// Worker process
-		else{
+        unsigned char *outputBufferWorker = (unsigned char*) malloc(bytesToReceive);
+       // memcpy(outputBufferWorker, bufferWorker, bytesToReceive);
+        memset(outputBufferWorker, 0, bytesToReceive);
+        // Aplicar el filtrado pixel a pixel
+        printf("imageWidth: %u\n", imgWidth);
+        for (int r = 0; r < assignedRows; r++) {
+            unsigned char *rowIn = bufferWorker + r * rowSize;
+            unsigned char *rowOut = outputBufferWorker + r * rowSize;
+           // printf("Processing row %d/%d\n", r + 1, assignedRows);
 
-			
-			
-			
-			
-			
-			
-			
-		}
+            for (unsigned int c = 0; c < imgWidth; c++) {
+                tPixelVector vector;
+                unsigned int numPixels = 0;
 
-		// Finish MPI environment
-		MPI_Finalize();
+                if (c > 0) vector[numPixels++] = rowIn[c - 1];
+                vector[numPixels++] = rowIn[c];
+                if (c + 1 < imgWidth) vector[numPixels++] = rowIn[c + 1];
+
+                unsigned char result = calculatePixelValue(vector, numPixels, threshold, DEBUG_FILTERING);
+                rowOut[c] = result;
+            }
+        }
+
+        // Enviar las filas procesadas al master
+        MPI_Send(outputBufferWorker, bytesToReceive, MPI_UNSIGNED_CHAR, 0, tag, MPI_COMM_WORLD);
+        printf("aaaaaaaaaaaaaaaaaaaaaa\n");
+
+        free(bufferWorker);
+        free(outputBufferWorker);
+
+    }
+
+    MPI_Finalize();
+    return 0;
 }
