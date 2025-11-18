@@ -21,6 +21,8 @@
 /** Black color */
 #define BLACK_COLOR 0
 
+#define FIN 0
+
 
 // BMP file header
 typedef struct{
